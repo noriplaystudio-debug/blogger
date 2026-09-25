@@ -1,0 +1,41 @@
+name: Serialize database schema initialization
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Add cross-instance schema lock
+        run: |
+          node <<'NODE'
+          const fs = require("fs");
+          const path = "lib/store.ts";
+          let s = fs.readFileSync(path, "utf8");
+          if (s.includes("pg_advisory_xact_lock(746523901)")) process.exit(0);
+          const tick = String.fromCharCode(96);
+          const start = "      const sql = db();\n      await sql" + tick + "CREATE TABLE IF NOT EXISTS automation_config";
+          const startNext = "      const database = db();\n      await database.begin(async (sql) => {\n        await sql" + tick + "SELECT pg_advisory_xact_lock(746523901)" + tick + ";\n      await sql" + tick + "CREATE TABLE IF NOT EXISTS automation_config";
+          if (!s.includes(start)) throw new Error("Schema start fragment not found");
+          s = s.replace(start, startNext);
+          const end = "      await sql" + tick + "INSERT INTO automation_config (id, style_guide) VALUES (1, ${DEFAULT_STYLE_GUIDE}) ON CONFLICT (id) DO NOTHING" + tick + ";\n";
+          if (!s.includes(end)) throw new Error("Schema end fragment not found");
+          s = s.replace(end, end + "      });\n");
+          fs.writeFileSync(path, s);
+          NODE
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/store.ts
+          if git diff --cached --quiet; then
+            echo "No changes required."
+          else
+            git commit -m "Serialize database schema initialization"
+            git push
+          fi
