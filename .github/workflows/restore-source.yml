@@ -1,0 +1,25 @@
+name: Restore complete Blogger source
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore application files
+        run: |
+          tar -xzf blogger-source.tgz
+          rm -f blogger-source.tgz
+          rm -f .github/workflows/restore-source.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Restore complete Blogger agent source"
+          git push
