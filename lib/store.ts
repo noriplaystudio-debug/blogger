@@ -7,10 +7,15 @@ import { MODEL_OPTIONS } from "@/lib/models";
 let client: ReturnType<typeof postgres> | undefined;
 let schemaReady: Promise<void> | undefined;
 
+function databaseUrl() {
+  return process.env.NEON_DATABASE_URL || process.env.DATABASE_URL;
+}
+
 function db() {
-  if (!process.env.DATABASE_URL)
+  const url = databaseUrl();
+  if (!url)
     throw new Error("자동 실행에는 DATABASE_URL이 필요합니다.");
-  client ||= postgres(process.env.DATABASE_URL, {
+  client ||= postgres(url, {
     max: 3,
     ssl: process.env.DATABASE_SSL === "false" ? false : "require",
   });
@@ -18,7 +23,7 @@ function db() {
 }
 
 export function hasDatabase() {
-  return Boolean(process.env.DATABASE_URL);
+  return Boolean(databaseUrl());
 }
 
 export async function ensureSchema() {
