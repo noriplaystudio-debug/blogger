@@ -1,0 +1,58 @@
+name: Apply Neon database compatibility
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch database connection
+        run: |
+          node <<'NODE'
+          const fs = require("fs");
+          const path = "lib/store.ts";
+          let s = fs.readFileSync(path, "utf8");
+          if (s.includes("process.env.NEON_DATABASE_URL || process.env.DATABASE_URL")) {
+            console.log("Neon compatibility is already applied.");
+            process.exit(0);
+          }
+          const replacements = [
+            [
+              'let schemaReady: Promise<void> | undefined;\n',
+              'let schemaReady: Promise<void> | undefined;\n\nfunction databaseUrl() {\n  return process.env.NEON_DATABASE_URL || process.env.DATABASE_URL;\n}\n'
+            ],
+            [
+              'function db() {\n  if (!process.env.DATABASE_URL)',
+              'function db() {\n  const url = databaseUrl();\n  if (!url)'
+            ],
+            [
+              'client ||= postgres(process.env.DATABASE_URL, {',
+              'client ||= postgres(url, {'
+            ],
+            [
+              'return Boolean(process.env.DATABASE_URL);',
+              'return Boolean(databaseUrl());'
+            ]
+          ];
+          for (const [from, to] of replacements) {
+            if (!s.includes(from)) throw new Error('Expected source fragment was not found: ' + from);
+            s = s.replace(from, to);
+          }
+          fs.writeFileSync(path, s);
+          NODE
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/store.ts
+          if git diff --cached --quiet; then
+            echo "No changes required."
+          else
+            git commit -m "Use Neon database connection"
+            git push
+          fi
