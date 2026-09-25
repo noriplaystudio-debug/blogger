@@ -1,0 +1,116 @@
+.trendGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.trendGrid .keyword {
+  min-height: 220px;
+}
+
+.keywordTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.trend {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+}
+
+.trend-상승 {
+  background: #dff3e7;
+  color: #18643f;
+}
+.trend-보합 {
+  background: #e7edf5;
+  color: #425b79;
+}
+.trend-하락 {
+  background: #f8e3df;
+  color: #9b3b2d;
+}
+.trend-판단보류 {
+  background: #eeeae2;
+  color: #686158;
+}
+
+.trendReason {
+  color: var(--muted);
+  font-size: 12px !important;
+}
+
+.dataNote {
+  margin: 0 0 18px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@media (max-width: 800px) {
+  .trendGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.marketStart {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  background: linear-gradient(135deg, #eef7f1, #ffffff);
+}
+
+.marketStart h2 {
+  margin: 0 0 7px;
+}
+.marketStart p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.categoryGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.categoryCard {
+  white-space: normal;
+  text-align: left;
+  color: var(--ink);
+  background: #fafbf9;
+  border: 1px solid var(--line);
+  padding: 18px;
+}
+
+.categoryCard:hover {
+  border-color: var(--accent);
+  background: #eff7f2;
+}
+.categoryCard p {
+  font-size: 13px;
+  line-height: 1.5;
+}
+.categoryCard small,
+.categoryCard em {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+}
+
+@media (max-width: 800px) {
+  .marketStart {
+    display: block;
+  }
+  .marketStart button {
+    width: 100%;
+    margin-top: 18px;
+  }
+  .categoryGrid {
+    grid-template-columns: 1fr;
+  }
+}
