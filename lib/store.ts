@@ -29,7 +29,9 @@ export function hasDatabase() {
 export async function ensureSchema() {
   if (!schemaReady)
     schemaReady = (async () => {
-      const sql = db();
+      const database = db();
+      await database.begin(async (sql) => {
+        await sql`SELECT pg_advisory_xact_lock(746523901)`;
       await sql`CREATE TABLE IF NOT EXISTS automation_config (
       id integer PRIMARY KEY DEFAULT 1 CHECK (id = 1),
       enabled boolean NOT NULL DEFAULT true,
@@ -178,6 +180,7 @@ export async function ensureSchema() {
     )`;
       await sql`CREATE INDEX IF NOT EXISTS audit_events_created_idx ON audit_events(created_at DESC)`;
       await sql`INSERT INTO automation_config (id, style_guide) VALUES (1, ${DEFAULT_STYLE_GUIDE}) ON CONFLICT (id) DO NOTHING`;
+      });
     })().catch((error) => {
       schemaReady = undefined;
       throw error;
