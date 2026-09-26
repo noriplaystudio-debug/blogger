@@ -1,6 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
-
-const SESSION_COOKIE = "blogger_agent_session";
+import { NextRequest, NextResponse } from "next/server";const SESSION_COOKIE = "blogger_agent_auth";
 const SESSION_MESSAGE = "blogger-agent-dashboard-v1";
 
 function withSecurityHeaders(response: NextResponse) {
