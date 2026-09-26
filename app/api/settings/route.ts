@@ -9,15 +9,9 @@ export async function GET() {
     return NextResponse.json(
       {
         connected: {
-          openai: Boolean(
-            session.apiKeys?.openai || process.env.OPENAI_API_KEY,
-          ),
-          anthropic: Boolean(
-            session.apiKeys?.anthropic || process.env.ANTHROPIC_API_KEY,
-          ),
-          google: Boolean(
-            session.apiKeys?.google || process.env.GEMINI_API_KEY,
-          ),
+          openai: Boolean(session.apiKeys?.openai || process.env.OPENAI_API_KEY),
+          anthropic: Boolean(session.apiKeys?.anthropic || process.env.ANTHROPIC_API_KEY),
+          google: Boolean(session.apiKeys?.google || process.env.GEMINI_API_KEY),
         },
         writerModel: session.writerModel || "",
         reviewerModel: session.reviewerModel || "",
@@ -38,20 +32,29 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const session = await getSession();
-    session.apiKeys = {
-      openai:
-        body.apiKeys?.openai?.trim() ||
-        session.apiKeys?.openai ||
-        process.env.OPENAI_API_KEY,
-      anthropic:
-        body.apiKeys?.anthropic?.trim() ||
-        session.apiKeys?.anthropic ||
-        process.env.ANTHROPIC_API_KEY,
-      google:
-        body.apiKeys?.google?.trim() ||
-        session.apiKeys?.google ||
-        process.env.GEMINI_API_KEY,
+    // Production keys live in Vercel environment variables. Do not copy them
+    // into the iron-session cookie: API keys are large and can exceed the
+    // browser cookie limit. Keep a submitted key only in local/dev mode.
+    const submittedKeys = {
+      openai: body.apiKeys?.openai?.trim(),
+      anthropic: body.apiKeys?.anthropic?.trim(),
+      google: body.apiKeys?.google?.trim(),
     };
+    const sessionKeys = {
+      openai: process.env.OPENAI_API_KEY
+        ? undefined
+        : submittedKeys.openai || session.apiKeys?.openai,
+      anthropic: process.env.ANTHROPIC_API_KEY
+        ? undefined
+        : submittedKeys.anthropic || session.apiKeys?.anthropic,
+      google: process.env.GEMINI_API_KEY
+        ? undefined
+        : submittedKeys.google || session.apiKeys?.google,
+    };
+    session.apiKeys =
+      sessionKeys.openai || sessionKeys.anthropic || sessionKeys.google
+        ? sessionKeys
+        : undefined;
     if (body.writerModel) {
       providerFor(body.writerModel);
       session.writerModel = body.writerModel;
@@ -74,7 +77,17 @@ export async function POST(req: NextRequest) {
         styleGuide === DEFAULT_STYLE_GUIDE ? undefined : styleGuide;
     }
 
-    const keys = session.apiKeys;
+    // Prefer server-side keys for requests, while allowing local/dev key input.
+    const keys = {
+      openai:
+        process.env.OPENAI_API_KEY || submittedKeys.openai || session.apiKeys?.openai,
+      anthropic:
+        process.env.ANTHROPIC_API_KEY ||
+        submittedKeys.anthropic ||
+        session.apiKeys?.anthropic,
+      google:
+        process.env.GEMINI_API_KEY || submittedKeys.google || session.apiKeys?.google,
+    };
     const requestedTests: string[] = body.testModels || [];
     const results: Record<string, string> = {};
     await Promise.all(
