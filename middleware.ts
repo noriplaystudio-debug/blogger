@@ -35,9 +35,9 @@ async function sessionToken(password: string) {
 
 function loginPage(message = "") {
   const error = message
-    ? `<p role="alert" style="color:#a33">${error}</p>`
+    ? `<p role="alert" style="color:#a33">${message}</p>`
     : "";
-  return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Blogger 에이전트 로그인</title></head><body style="font-family:system-ui,sans-serif;background:#f6f4ed;margin:0;min-height:100vh;display:grid;place-items:center"><main style="width:min(420px,calc(100% - 40px));background:white;border:1px solid #d9ded8;border-radius:20px;padding:32px;box-sizing:border-box"><h1 style="margin-top:0">Blogger 에이전트 로그인</h1><p>대시보드 비밀번호를 입력하세요.</p>${error}<form method="post" action="/login"><label for="password" style="display:block;margin-bottom:8px">비밀번호</label><input id="password" name="password" type="password" autocomplete="current-password" required style="width:100%;box-sizing:border-box;padding:12px;border:1px solid #aab2ad;border-radius:10px"><button type="submit" style="width:100%;margin-top:16px;padding:12px;border:0;border-radius:10px;background:#14231d;color:white;font-weight:700">로그인</button></form></main></body></html>`;
+  return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Blogger 에이전트 로그인</title></head><body style="font-family:system-ui,sans-serif;background:#f6f4ed;margin:0;min-height:100vh;display:grid;place-items:center"><main style="width:min(420px,calc(100% - 40px));background:white;border:1px solid #d9ded8;border-radius:20px;padding:32px;box-sizing:border-box"><h1 style="margin-top:0">Blogger 에이전트 로그인</h1><p>대시보드 비밀번호를 입력하세요.</p>${message}<form method="post" action="/login"><label for="password" style="display:block;margin-bottom:8px">비밀번호</label><input id="password" name="password" type="password" autocomplete="current-password" required style="width:100%;box-sizing:border-box;padding:12px;border:1px solid #aab2ad;border-radius:10px"><button type="submit" style="width:100%;margin-top:16px;padding:12px;border:0;border-radius:10px;background:#14231d;color:white;font-weight:700">로그인</button></form></main></body></html>`;
 }
 
 export async function middleware(req: NextRequest) {
