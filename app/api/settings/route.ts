@@ -70,7 +70,6 @@ export async function POST(req: NextRequest) {
           },
           { status: 400 },
         );
-      // 기본 가이드는 코드에서 다시 제공해 쿠키에 중복 저장하지 않는다.
       session.styleGuide =
         styleGuide === DEFAULT_STYLE_GUIDE ? undefined : styleGuide;
     }
@@ -86,7 +85,7 @@ export async function POST(req: NextRequest) {
             keys,
             system: "연결 확인",
             prompt: "OK라고만 답하세요.",
-            maxTokens: 12,
+            maxTokens: 16,
           });
           results[providerFor(model)] = "연결됨";
         } catch (error: any) {
