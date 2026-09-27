@@ -1078,18 +1078,35 @@ export async function produceArticle(
   let researchDossier: ResearchDossier | null =
     recoveryMode && existingArticle
       ? existingArticle.researchDossier || null
-      : null;
+      : body.angle?.prevalidatedDossier || null;
   let sources =
     recoveryMode && existingArticle
       ? existingArticle.sources || body.sources || []
-      : body.sources || [];
+      : body.angle?.prevalidatedSources || body.sources || [];
   let researchAttempts =
     recoveryMode && existingArticle
       ? Number(existingArticle.researchAttempts || 0)
       : 0;
   let evidencePolicy: EvidencePolicy =
     existingArticle?.evidencePolicy || determineEvidencePolicy(body);
-  if (keys.openai && (!recoveryMode || recoveryMode === "evidence_repair")) {
+  // 계획 단계에서 이미 검증된 dossier/source가 있으면 작성 단계에서
+  // 동일한 웹 조사를 반복하지 않는다. 이 중복 호출이 Vercel 60초 제한의
+  // 가장 큰 원인이었고, 계획의 저장 결과를 그대로 재사용하는 것이 더
+  // 빠르고 일관된 동작이다.
+  const hasPrevalidatedResearch = Boolean(
+    researchDossier &&
+      Array.isArray(researchDossier.claims) &&
+      researchDossier.claims.length > 0 &&
+      Array.isArray(sources) &&
+      sources.length > 0,
+  );
+  if (hasPrevalidatedResearch && !String(research).trim())
+    research = JSON.stringify(researchDossier);
+  if (
+    keys.openai &&
+    (!recoveryMode || recoveryMode === "evidence_repair") &&
+    !hasPrevalidatedResearch
+  ) {
     const result = await researchArticleEvidence(keys.openai, body);
     researchDossier = result.dossier;
     sources = result.sources;
@@ -1164,7 +1181,11 @@ export async function produceArticle(
       : recoveryMode === "evidence_repair"
         ? `\n[근거 보강 작업]\n새 조사 문서에서 추가 확인된 주장만 이용한다. 기존 글의 미확인·왜곡·현재성 문제 문장을 새 근거에 맞게 수정하거나 삭제하고, 문제없는 부분은 유지한다. 새 출처를 찾지 못한 내용은 추측하지 말고 범위를 축소한다. 수정 후에는 전체 JSON 원고를 반환한다.\n기존 글: ${JSON.stringify(existingArticle).slice(0, 30000)}\n이전 근거 문제: ${JSON.stringify(previousIssues).slice(0, 8000)}\n`
         : "";
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  // 신규 글은 한 번의 작성·검수 요청으로 끝내고, 실패 시 작업 단위로
+  // 저장해 다음 실행에서 재개한다. 같은 요청 안에서 3회 재생성하면
+  // 품질보다 서버 함수 시간 초과 가능성이 커진다.
+  const maxGenerationAttempts = recoveryMode ? 2 : 1;
+  for (let attempt = 0; attempt < maxGenerationAttempts; attempt += 1) {
     try {
       actualReviewerModel =
         attempt > 0 &&
@@ -1182,7 +1203,7 @@ export async function produceArticle(
           json: true,
           jsonSchema: WRITER_RESPONSE_SCHEMA,
           schemaName: "blog_article",
-          maxTokens: 7000,
+          maxTokens: 4800,
           prompt: `카테고리: ${body.category}\n핵심 키워드: ${body.keyword}\n검색 의도: ${body.intent}\n글 방향: ${body.angle.titleIdea}\n차별화 목적: ${body.angle.purpose}\n독자 질문: ${body.angle.searchQuestion || body.keyword}\n독자 상황: ${body.angle.readerSituation || "미지정"}\n답변 약속: ${body.angle.answerPromise || body.angle.purpose}\n필수 내용: ${JSON.stringify(body.angle.mustCover || [])}\n제외 범위: ${JSON.stringify(body.angle.exclusions || [])}\n계획된 독창 가치: ${body.angle.uniqueValue || "판단 기준과 실행 절차"}\n선택된 구성: ${structure}\n${recoveryInstruction}\n블로그 편집 가이드:\n${styleGuide}\n${performanceGuidance}\n검증 조사 문서:\n${research}\n\n검증된 출처 목록:\n${JSON.stringify(sources)}\n\n기존 글 제목과 요약(내용·제목·도입부를 반복하지 말 것):\n${JSON.stringify(existing)}\n${review?.issues?.length ? `\n이전 검수 문제를 모두 수정할 것:\n${review.issues.join("\n")}` : ""}${generationFailures.length ? `\n이전 생성 시 실패한 형식·길이 문제를 반복하지 말 것:\n${generationFailures.join("\n")}` : ""}\n\n[작성 전 근거 규칙]\n1. 조사 문서 coverage에서 supported=true이며 claimIds가 연결된 필수 내용만 확정적으로 쓴다.\n2. 모든 사실·날짜·수치·조건은 claims의 statement와 limitation 범위 안에서만 쓴다. claims에 없는 배경지식은 자연스러워 보여도 추가하지 않는다.\n3. conflicts는 어느 한쪽을 임의로 선택하지 말고 차이를 그대로 설명한다. unknowns는 확인된 사실처럼 바꾸지 않는다.\n4. 사실 문장 가까이에 해당 claim의 원문 링크를 자연스러운 앵커 문구로 연결한다.\n\n[제목 작성 기술]\n1. 먼저 direct_answer(답을 드러냄), conditional(대상·조건 명시), comparison(실제 비교축 명시), problem_solution(문제와 해결 결과 명시) 전략으로 제목 후보를 정확히 4개 만든다. 네 후보는 단어만 바꾼 변형이면 안 된다.\n2. 각 후보는 독자 질문 적합성, 약속하는 답, 과장·모호성·현재성 위험을 스스로 평가한다. 가장 자극적인 제목이 아니라 본문이 완전히 이행할 수 있고 기존 제목과 구별되는 제목을 선택한다.\n3. 제목은 12~70자, 한국어 본문과 같은 언어로 쓰고 핵심 키워드·동의어를 반복하지 않는다. 연도·가격·숫자는 조사 문서와 본문에서 현재 기준으로 확인된 경우에만 쓴다. 총정리·완벽 가이드·한눈에 보기·모르면 손해 같은 상투·공포 표현, 불필요한 괄호·구분자·감탄부호는 쓰지 않는다.\n4. 검색어를 그대로 나열하지 말고 대상, 조건, 판단 기준 또는 얻는 결과 중 이 글의 핵심을 구체적으로 드러낸다. 제목이 약속하지 않은 내용을 본문에 억지로 늘리지 않는다.\n\n[본문 작성 기술]\n1. 첫 문단 35~320자 안에서 질문에 바로 답하고, 적용 조건과 가장 중요한 예외를 함께 밝힌다. 인사·글 소개·목차 예고로 시작하지 않는다.\n2. 소제목은 '서론·본론·결론·정리·장점·단점'처럼 빈 라벨을 쓰지 말고, 해당 구획에서 독자가 얻게 될 답을 구체적으로 쓴다. 2~9개의 소제목으로 논리 순서를 만든다.\n3. 한 문단에는 하나의 핵심만 두고, 500자가 넘는 벽문단을 반복하지 않는다. 같은 뜻의 문장, 도입부 답의 단순 반복, 키워드의 기계적 반복을 제거한다.\n4. 사실 문장 가까이에 자연스러운 앵커 텍스트로 출처를 연결한다. 출처 목록만 끝에 몰아넣거나 URL을 그대로 앵커 텍스트로 쓰지 않는다. 조건·예외·출처 충돌과 확인 불가 사항을 해당 판단 지점에 배치한다.\n5. 검색 의도에 맞는 비교 기준·계산·체크리스트·의사결정 절차 중 하나를 완성된 형태로 제공한다. 예시는 실제 경험처럼 꾸미지 말고 가정임을 밝힌다.\n6. 마지막 구획에서는 본문을 되풀이하지 말고 독자가 지금 확인하거나 실행할 다음 행동, 적용되지 않는 경우, 재확인이 필요한 시점을 제시한다.\n7. 본문 순수 텍스트는 보통 1,500~5,000자로 제한한다. 정보가 충분하지 않은데 길이를 채우지 말고, 같은 설명을 반복하지 않는다.\n\n응답은 제공된 JSON 스키마를 정확히 따르고 설명 문장이나 코드펜스를 밖에 붙이지 않는다.`,
         });
         let parsedDraft: Draft;
@@ -1197,7 +1218,7 @@ export async function produceArticle(
             json: true,
             jsonSchema: WRITER_RESPONSE_SCHEMA,
             schemaName: "repaired_blog_article",
-            maxTokens: 7000,
+            maxTokens: 4200,
             prompt: `다음 블로그 초안 응답을 지정 스키마의 유효한 JSON으로 변환하라. 빠진 설명 필드는 원문 내용만 이용해 짧게 채운다. 스키마: {"title":"","titleCandidates":[{"title":"","strategy":"direct_answer|conditional|comparison|problem_solution","queryFit":"","promise":"","risk":""}],"titleSelectionReason":"","metaDescription":"","labels":[],"html":"","factualNotes":[],"answerSummary":"","valueAdd":{"type":"","description":""}}\n\n원문 응답:\n${draftText}`,
           });
           parsedDraft = parseJson<Draft>(repairedDraftText);
@@ -1229,7 +1250,7 @@ export async function produceArticle(
         json: true,
         jsonSchema: REVIEW_RESPONSE_SCHEMA,
         schemaName: "editorial_review",
-        maxTokens: 7000,
+        maxTokens: 4800,
         prompt: `검색 의도: ${body.intent}\n키워드: ${body.keyword}\n글 브리프: ${JSON.stringify(body.angle)}\n블로그 편집 가이드:\n${styleGuide}\n${performanceGuidance}\n검증 조사 문서:\n${research}\n출처:\n${JSON.stringify(sources)}\n\n코드 기반 초안 진단: ${JSON.stringify(draftDiagnostics)}\n초안:\n${JSON.stringify(draft)}\n\n[편집 감수 순서]\n1. 제목 후보 네 개와 선택 근거를 비교해 독자의 질문, 본문의 실제 답, 구체성, 자연스러운 한국어를 가장 잘 만족하는 제목으로 다듬는다. 자극적인 표현, 불필요한 연도·숫자, 키워드 반복은 제거한다.\n2. 첫 문단이 질문에 바로 답하도록 다듬고, 장황하거나 번역투인 문장·같은 뜻의 반복·상투적인 AI 문구를 자연스러운 한국어로 고친다.\n3. 소제목과 문단 순서를 ‘직접 답변 → 판단 기준 → 실행 방법 → 조건·예외 → 다음 행동’처럼 독자가 읽기 쉬운 흐름으로 재배치한다. 한 문단에는 하나의 핵심만 둔다.\n4. 표·목록·체크리스트가 본문 설명과 중복되지 않고 실제 판단에 도움이 되는지 정리한다. 마지막 문단은 요약 반복 대신 다음 행동과 재확인 시점을 제시한다.\n5. 새 사실을 추가하지 않는다. 조사 문서 claims에 없는 사실·날짜·숫자는 삭제하고, 출처 조건과 다른 표현은 원래 근거 범위로 축소한다. 근거 검증 자체는 작성 전 조사와 뒤의 독립 감사가 담당한다.\n6. 코드 진단 issues를 모두 해결하고 correctedHtml에 부분 수정본이 아닌 완성된 전체 HTML을 반환한다.\n\n통과 조건은 종합 88점, 사실성·근거성 각 95점, 유용성 88점, 검색의도 90점, 독창 가치·가독성 각 85점, 제목 정확성·완결성 각 90점 이상이며 본문 유사도는 40%, 제목 유사도는 62% 미만이다. JSON 스키마에 맞는 객체만 출력한다.`,
       });
       let parsedReview: Review;
@@ -1244,7 +1265,7 @@ export async function produceArticle(
           json: true,
           jsonSchema: REVIEW_RESPONSE_SCHEMA,
           schemaName: "repaired_editorial_review",
-          maxTokens: 7000,
+          maxTokens: 4200,
           prompt: `다음 검수 응답을 지정 스키마의 유효한 JSON으로 변환하라. 스키마: {"passed":false,"overallScore":0,"factualScore":0,"usefulnessScore":0,"styleScore":0,"intentScore":0,"evidenceScore":0,"originalValueScore":0,"readabilityScore":0,"titleAccuracyScore":0,"completenessScore":0,"titleAssessment":{"queryMatch":0,"specificity":0,"accuracy":0,"distinctiveness":0,"concision":0,"decision":""},"issues":[],"correctedTitle":"","correctedMetaDescription":"","correctedHtml":""}\n\n원문 응답:\n${reviewText}`,
         });
         parsedReview = parseJson<Review>(repairedReviewText);
@@ -1311,9 +1332,18 @@ export async function produceArticle(
         const canUsePrevalidatedAudit = Boolean(
           researchDossier &&
             body.angle?.prevalidatedDossier &&
-            evidencePolicy.level === "standard" &&
+            Array.isArray(researchDossier.claims) &&
+            researchDossier.claims.length >= evidencePolicy.minimumClaims &&
             Array.isArray(sources) &&
-            sources.length >= 2,
+            new Set(
+              sources.map((source: any) => {
+                try {
+                  return new URL(source.url).hostname;
+                } catch {
+                  return "";
+                }
+              }),
+            ).size >= evidencePolicy.minimumDomains,
         );
         evidenceAudit = canUsePrevalidatedAudit
           ? {
