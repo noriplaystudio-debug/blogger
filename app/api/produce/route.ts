@@ -11,7 +11,9 @@ import {
   updateJob,
 } from "@/lib/store";
 
-export const maxDuration = 60;
+// Article generation includes model writing, review, and Blogger-safe validation.
+// Allow the manual one-article test to finish instead of Vercel killing it at 60s.
+export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
   let body: any = null;
