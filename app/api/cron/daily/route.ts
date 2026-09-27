@@ -24,7 +24,8 @@ import {
   updateJob,
 } from "@/lib/store";
 
-export const maxDuration = 60;
+// Daily jobs are persisted per article and may span multiple model calls.
+export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
