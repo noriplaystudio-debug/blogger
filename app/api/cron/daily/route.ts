@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assertCron, serverKeys } from "@/lib/cron";
-import { createBloggerDraft, publishBloggerDraft } from "@/lib/google";
+import {
+  createBloggerDraft,
+  publishBloggerDraft,
+  resolveBloggerBlogIdByName,
+} from "@/lib/google";
 import {
   isSourceBlockedError,
   isSystemicProviderError,
@@ -35,6 +39,14 @@ export async function GET(req: NextRequest) {
     assertCron(req);
     if (!hasDatabase()) throw new Error("DATABASE_URL이 없습니다.");
     const config = await getAutomationConfig();
+    const primaryBlogName = process.env.PRIMARY_BLOGGER_NAME?.trim() || "장학짱";
+    let primaryBlogId: string | null = null;
+    const resolveTargetBlogId = async (job: any) => {
+      if (job.blog_id) return String(job.blog_id);
+      if (!primaryBlogId)
+        primaryBlogId = await resolveBloggerBlogIdByName(primaryBlogName);
+      return primaryBlogId;
+    };
     if (!config.enabled)
       return NextResponse.json({
         skipped: true,
@@ -51,17 +63,19 @@ export async function GET(req: NextRequest) {
     const draftResults: any[] = [];
     for (const job of readyDrafts) {
       try {
-        const post = await createBloggerDraft(job.blog_id, job.article, job.id);
+        const targetBlogId = await resolveTargetBlogId(job);
+        const post = await createBloggerDraft(targetBlogId, job.article, job.id);
         const published = config.autoPublish
           ? post.published
             ? post
-            : await publishBloggerDraft(job.blog_id, post.id!)
+            : await publishBloggerDraft(targetBlogId, post.id!)
           : null;
         const finalState = published ? "published" : "draft";
         await updateJob(job.id, {
           state: finalState,
           article: job.article,
           bloggerPostId: published?.id || post.id,
+          blogId: targetBlogId,
         });
         await recordAuditEvent({
           action: published
@@ -74,7 +88,7 @@ export async function GET(req: NextRequest) {
           entityType: "article_job",
           entityId: job.id,
           detail: {
-            blogId: job.blog_id,
+            blogId: targetBlogId,
             postId: published?.id || post.id,
             title: job.article.title,
             mode: config.autoPublish
@@ -139,11 +153,12 @@ export async function GET(req: NextRequest) {
       }
       const job = jobs[index];
       try {
-        const existingArticles = await getRecentArticles(40, job.blog_id);
-        const performanceGuidance = await getPerformanceGuidance(job.blog_id);
+        const targetBlogId = await resolveTargetBlogId(job);
+        const existingArticles = await getRecentArticles(40, targetBlogId);
+        const performanceGuidance = await getPerformanceGuidance(targetBlogId);
         const reservation = await reserveEstimatedCost({
           jobId: job.id,
-          blogId: job.blog_id,
+          blogId: targetBlogId,
           kind: `article-production-attempt-${Number(job.attempts || 0) + 1}`,
           amountWon: Math.ceil(
             Number(config.estimatedArticleCostWon || 0) *
@@ -205,18 +220,19 @@ export async function GET(req: NextRequest) {
             performanceGuidance,
           },
         );
-        if (article.status === "ready" && job.blog_id) {
-          const post = await createBloggerDraft(job.blog_id, article, job.id);
+        if (article.status === "ready") {
+          const post = await createBloggerDraft(targetBlogId, article, job.id);
           const published = config.autoPublish
             ? post.published
               ? post
-              : await publishBloggerDraft(job.blog_id, post.id!)
+              : await publishBloggerDraft(targetBlogId, post.id!)
             : null;
           const finalState = published ? "published" : "draft";
           await updateJob(job.id, {
             state: finalState,
             article,
             bloggerPostId: published?.id || post.id,
+            blogId: targetBlogId,
           });
           await recordAuditEvent({
             action: published
@@ -229,7 +245,7 @@ export async function GET(req: NextRequest) {
             entityType: "article_job",
             entityId: job.id,
             detail: {
-              blogId: job.blog_id,
+              blogId: targetBlogId,
               postId: published?.id || post.id,
               title: article.title,
               mode: config.autoPublish
@@ -246,14 +262,13 @@ export async function GET(req: NextRequest) {
           await updateJob(job.id, {
             state: article.status,
             article,
-            error: job.blog_id
-              ? null
-              : "Blogger 블로그 매핑이 없어 내부 검토 대기 상태로 저장했습니다.",
+            blogId: targetBlogId,
+            error: null,
           });
           results.push({
             id: job.id,
             state: article.status,
-            bloggerMapped: Boolean(job.blog_id),
+            bloggerMapped: true,
           });
         }
         completedSlots += 1;
