@@ -79,7 +79,6 @@ export async function POST(req: NextRequest) {
   try {
     const {
       action = "draft",
-      blogId: requestedBlogId,
       postId,
       jobId,
       title,
