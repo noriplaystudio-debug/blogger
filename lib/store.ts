@@ -107,6 +107,17 @@ export async function ensureSchema() {
       captured_at timestamptz NOT NULL DEFAULT now(),
       updated_at timestamptz NOT NULL DEFAULT now()
     )`;
+      await sql`CREATE TABLE IF NOT EXISTS weekly_planning_runs (
+      run_key text PRIMARY KEY,
+      week_start date NOT NULL,
+      mode text NOT NULL,
+      settings jsonb NOT NULL,
+      draft jsonb,
+      sources jsonb NOT NULL DEFAULT '[]'::jsonb,
+      status text NOT NULL DEFAULT 'running',
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )`;
       await sql`CREATE TABLE IF NOT EXISTS article_jobs (
       id text PRIMARY KEY,
       week_start date NOT NULL REFERENCES weekly_plans(week_start) ON DELETE CASCADE,
@@ -566,6 +577,67 @@ export async function getPlanningSearchSnapshot() {
         ? row.captured_at.toISOString()
         : String(row.captured_at),
   };
+}
+
+export async function getWeeklyPlanningProgress(runKey: string) {
+  await ensureSchema();
+  const [row] = await db()`SELECT run_key, week_start, mode, settings, draft, sources, status, created_at, updated_at
+    FROM weekly_planning_runs WHERE run_key=${runKey}`;
+  if (!row) return null;
+  return {
+    runKey: row.run_key as string,
+    weekStart:
+      row.week_start instanceof Date
+        ? row.week_start.toISOString().slice(0, 10)
+        : String(row.week_start).slice(0, 10),
+    mode: row.mode as string,
+    settings: row.settings || {},
+    draft: row.draft || null,
+    sources: row.sources || [],
+    status: row.status as string,
+    createdAt:
+      row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+    updatedAt:
+      row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
+  };
+}
+
+export async function saveWeeklyPlanningProgress(input: {
+  runKey: string;
+  weekStart: string;
+  mode: "manual" | "automatic";
+  settings: any;
+  draft: any | null;
+  sources?: any[];
+  status?: "running" | "ready" | "failed";
+}) {
+  await ensureSchema();
+  await db()`INSERT INTO weekly_planning_runs
+    (run_key, week_start, mode, settings, draft, sources, status, updated_at)
+    VALUES (
+      ${input.runKey},
+      ${input.weekStart},
+      ${input.mode},
+      ${db().json(input.settings || {})},
+      ${input.draft ? db().json(input.draft) : null},
+      ${db().json(input.sources || [])},
+      ${input.status || "running"},
+      now()
+    )
+    ON CONFLICT (run_key) DO UPDATE SET
+      week_start=EXCLUDED.week_start,
+      mode=EXCLUDED.mode,
+      settings=EXCLUDED.settings,
+      draft=EXCLUDED.draft,
+      sources=EXCLUDED.sources,
+      status=EXCLUDED.status,
+      updated_at=now()`;
+}
+
+export async function weeklyPlanExists(weekStart: string) {
+  await ensureSchema();
+  const [row] = await db()`SELECT 1 AS ok FROM weekly_plans WHERE week_start=${weekStart} LIMIT 1`;
+  return Boolean(row?.ok);
 }
 
 export async function getRecentKeywords() {
