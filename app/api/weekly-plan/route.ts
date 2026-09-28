@@ -19,11 +19,14 @@ import {
   getRecentKeywords,
   getStrategyGuidance,
   hasDatabase,
+  getWeeklyPlanningProgress,
   markPlanningSearchReady,
+  mondayOfKoreaWeek,
   persistWeeklyPlan,
   reserveEstimatedCost,
   saveAutomationConfig,
   savePlanningSearchSnapshot,
+  saveWeeklyPlanningProgress,
 } from "@/lib/store";
 
 // Vercel Hobby allows up to 60 seconds per function invocation.
@@ -100,10 +103,20 @@ export async function POST(req: NextRequest) {
         requested.dailyArticleLimit ?? config?.dailyArticleLimit,
     });
 
+    const manualRunId = String(requested.runId || randomUUID()).slice(0, 100);
+    const planningRunKey = `manual:${manualRunId}`;
+    const weekStart = mondayOfKoreaWeek();
+    const mergeSources = (left: any[] = [], right: any[] = []) => [
+      ...new Map(
+        [...left, ...right]
+          .filter((source: any) => source?.url)
+          .map((source: any) => [String(source.url), source]),
+      ).values(),
+    ];
+
     if (phase === "categories" && config) {
-      const runKey = String(requested.runId || randomUUID()).slice(0, 100);
       const reservation = await reserveEstimatedCost({
-        jobId: `manual-weekly-plan:${runKey}`,
+        jobId: `manual-weekly-plan:${manualRunId}`,
         kind: "weekly-plan",
         amountWon: config.estimatedWeeklyPlanCostWon,
         detail: { basis: "user-configured-estimate", mode: "manual-staged" },
@@ -151,6 +164,16 @@ export async function POST(req: NextRequest) {
         performanceGuidance,
         strategyGuidance,
       });
+      if (hasDatabase())
+        await saveWeeklyPlanningProgress({
+          runKey: planningRunKey,
+          weekStart,
+          mode: "manual",
+          settings: planningSettings,
+          draft: result.draft,
+          sources: result.sources || [],
+          status: "running",
+        });
       return NextResponse.json({ phase, ...result });
     }
 
@@ -166,6 +189,25 @@ export async function POST(req: NextRequest) {
         recentContent,
         settings: planningSettings,
       });
+      if (hasDatabase()) {
+        const progress = await getWeeklyPlanningProgress(planningRunKey);
+        const draft = progress?.draft;
+        if (draft?.categories) {
+          const target = draft.categories.find(
+            (category: any) => category.name === requested.category.name,
+          );
+          if (target) target.keywords = result.keywords;
+          await saveWeeklyPlanningProgress({
+            runKey: planningRunKey,
+            weekStart,
+            mode: "manual",
+            settings: planningSettings,
+            draft,
+            sources: mergeSources(progress?.sources || [], result.sources || []),
+            status: "running",
+          });
+        }
+      }
       return NextResponse.json({ phase, ...result });
     }
 
@@ -180,6 +222,27 @@ export async function POST(req: NextRequest) {
         keyword: requested.keyword,
         settings: planningSettings,
       });
+      if (hasDatabase()) {
+        const progress = await getWeeklyPlanningProgress(planningRunKey);
+        const draft = progress?.draft;
+        const targetCategory = draft?.categories?.find(
+          (category: any) => category.name === requested.category.name,
+        );
+        const targetKeyword = targetCategory?.keywords?.find(
+          (keyword: any) => keyword.keyword === requested.keyword.keyword,
+        );
+        if (targetKeyword) targetKeyword.angles = result.angles;
+        if (draft)
+          await saveWeeklyPlanningProgress({
+            runKey: planningRunKey,
+            weekStart,
+            mode: "manual",
+            settings: planningSettings,
+            draft,
+            sources: progress?.sources || [],
+            status: "running",
+          });
+      }
       return NextResponse.json({ phase, ...result });
     }
 
@@ -224,6 +287,16 @@ export async function POST(req: NextRequest) {
           planningSettings.dailyArticleLimit,
         )
       : null;
+    if (hasDatabase())
+      await saveWeeklyPlanningProgress({
+        runKey: planningRunKey,
+        weekStart,
+        mode: "manual",
+        settings: planningSettings,
+        draft: requested.draft,
+        sources,
+        status: "ready",
+      });
     return NextResponse.json({
       phase,
       ...plan,
