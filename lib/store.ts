@@ -636,7 +636,6 @@ export async function claimReadyDraftJobs(limit = 20) {
     const rows = await tx`SELECT * FROM article_jobs
       WHERE scheduled_date IS NOT NULL
         AND scheduled_date <= ${today}
-        AND blog_id IS NOT NULL
         AND article IS NOT NULL
         AND (
           state='ready'
@@ -674,10 +673,11 @@ export async function updateJob(
     article?: any;
     error?: string | null;
     bloggerPostId?: string;
+    blogId?: string;
   },
 ) {
   await ensureSchema();
-  await db()`UPDATE article_jobs SET state=${input.state}, article=COALESCE(${input.article ? db().json(input.article) : null}, article), error=${input.error ?? null}, blogger_post_id=COALESCE(${input.bloggerPostId || null}, blogger_post_id), updated_at=now() WHERE id=${id}`;
+  await db()`UPDATE article_jobs SET state=${input.state}, article=COALESCE(${input.article ? db().json(input.article) : null}, article), error=${input.error ?? null}, blog_id=COALESCE(${input.blogId || null}, blog_id), blogger_post_id=COALESCE(${input.bloggerPostId || null}, blogger_post_id), updated_at=now() WHERE id=${id}`;
 }
 
 export async function startRun(kind: string) {
