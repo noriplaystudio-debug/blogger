@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { providerFor } from "@/lib/models";
 import { reportTokenConfigured } from "@/lib/report-auth";
+import { resolveBloggerBlogIdByName } from "@/lib/google";
 import {
   getAutomationConfig,
   getOperationalStats,
@@ -46,14 +47,19 @@ export async function GET() {
       ]);
     const writerProvider = providerFor(config.writerModel);
     const reviewerProvider = providerFor(config.reviewerModel);
-    const plannedCategories: string[] =
-      workspace.plan?.categories?.map((category: any) => category.name) || [];
-    const mappingTarget = plannedCategories.length
-      ? plannedCategories
-      : Object.keys(config.categoryBlogMap).slice(0, config.categoryCount);
-    const mappedCount = mappingTarget.filter(
-      (category) => config.categoryBlogMap[category],
-    ).length;
+    const primaryBlogName = process.env.PRIMARY_BLOGGER_NAME?.trim() || "장학짱";
+    let primaryBlogReady = false;
+    let primaryBlogDetail = `기본 Blogger '${primaryBlogName}' 확인 필요`;
+    if (googleConnected) {
+      try {
+        const primaryBlogId = await resolveBloggerBlogIdByName(primaryBlogName);
+        primaryBlogReady = Boolean(primaryBlogId);
+        primaryBlogDetail = `모든 카테고리 → ${primaryBlogName}`;
+      } catch (error: any) {
+        primaryBlogDetail =
+          error?.message || `기본 Blogger '${primaryBlogName}'을 찾지 못했습니다.`;
+      }
+    }
     const total = workspace.plan
       ? workspace.plan.categories.reduce(
           (sum: number, category: any) =>
@@ -128,9 +134,9 @@ export async function GET() {
       },
       {
         id: "mapping",
-        label: "카테고리별 Blogger 연결",
-        ready: mappingTarget.length > 0 && mappedCount >= mappingTarget.length,
-        detail: `${mappedCount}/${mappingTarget.length || config.categoryCount}개 매핑`,
+        label: "Blogger 게시 대상",
+        ready: primaryBlogReady,
+        detail: primaryBlogDetail,
       },
     ];
     return NextResponse.json({
@@ -139,7 +145,9 @@ export async function GET() {
       ...workspace,
       runs,
       auditEvents,
-      operational,
+      operational: primaryBlogReady
+        ? { ...operational, unmapped: 0 }
+        : operational,
       readiness,
       readyForUnattendedRun: readiness.every((item) => item.ready),
       schedule: {
