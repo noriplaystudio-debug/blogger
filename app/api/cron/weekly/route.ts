@@ -18,7 +18,8 @@ import {
   startRun,
 } from "@/lib/store";
 
-export const maxDuration = 60;
+// Weekly staged planning can span several model/search calls. Allow enough time for the automatic run to finish and persist article jobs.
+export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
