@@ -680,14 +680,9 @@ export default function Home() {
     refreshAutomationStatus(true);
   }, []);
 
-  useEffect(() => {
-    if (
-      planningRun?.settings &&
-      workflowSignature(planningRun.settings) !== workflowSignature(workflow)
-    )
-      setWorkflow(planningRun.settings);
-  }, [planningRun, workflow]);
-
+  // Do not lock the editable workflow controls to an interrupted planning run.
+  // If the user changes counts, createPlan() detects the new signature and starts
+  // a fresh run while keeping the old partial run available only until replaced.
   async function refreshAutomationStatus(loadWorkspace = false) {
     try {
       const response = await fetch("/api/automation/status", {
