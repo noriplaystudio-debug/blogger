@@ -1188,7 +1188,7 @@ export default function Home() {
         setBusy(
           `2/3단계 · 키워드 조사 ${categoryIndex + 1}/${categories.length} · ${category.name}`,
         );
-        const data = await postStage({ phase: "keywords", category });
+        const data = await postStage({ phase: "keywords", category, runId: run.id });
         category.keywords = data.keywords;
         run = {
           ...run,
@@ -1225,6 +1225,7 @@ export default function Home() {
           phase: "angles",
           category: item.category,
           keyword: item.keyword,
+          runId: run.id,
         });
         item.keyword.angles = data.angles;
         finishedAngles += 1;
@@ -1241,6 +1242,7 @@ export default function Home() {
         phase: "finalize",
         draft: run.draft,
         sources: run.sources,
+        runId: run.id,
       });
       const nextPlan = data as Plan;
       const nextTasks: Task[] = data.tasks?.length
