@@ -56,6 +56,7 @@ export async function ensureSchema() {
       monthly_fixed_cost_won integer NOT NULL DEFAULT 0,
       monthly_ai_budget_won integer NOT NULL DEFAULT 100000,
       pause_on_budget boolean NOT NULL DEFAULT true,
+      config_revision integer NOT NULL DEFAULT 1,
       updated_at timestamptz NOT NULL DEFAULT now()
     )`;
       await sql`ALTER TABLE automation_config ADD COLUMN IF NOT EXISTS category_count integer NOT NULL DEFAULT 5`;
@@ -74,6 +75,15 @@ export async function ensureSchema() {
       await sql`ALTER TABLE automation_config ADD COLUMN IF NOT EXISTS monthly_fixed_cost_won integer NOT NULL DEFAULT 0`;
       await sql`ALTER TABLE automation_config ADD COLUMN IF NOT EXISTS monthly_ai_budget_won integer NOT NULL DEFAULT 100000`;
       await sql`ALTER TABLE automation_config ADD COLUMN IF NOT EXISTS pause_on_budget boolean NOT NULL DEFAULT true`;
+      await sql`ALTER TABLE automation_config ADD COLUMN IF NOT EXISTS config_revision integer NOT NULL DEFAULT 1`;
+      await sql`UPDATE automation_config
+        SET category_count=5,
+            keywords_per_category=5,
+            articles_per_keyword=2,
+            daily_article_limit=7,
+            config_revision=2,
+            updated_at=now()
+        WHERE id=1 AND config_revision < 2`;
       await sql`CREATE TABLE IF NOT EXISTS oauth_credentials (
       id integer PRIMARY KEY DEFAULT 1 CHECK (id = 1),
       access_token text,
