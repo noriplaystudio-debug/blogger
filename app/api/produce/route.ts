@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
+import { resolveBloggerBlogIdByName } from "@/lib/google";
 import { isSourceBlockedError, produceArticle } from "@/lib/production";
 import {
   getAutomationConfig,
@@ -31,7 +32,10 @@ export async function POST(req: NextRequest) {
       anthropic: session.apiKeys?.anthropic || process.env.ANTHROPIC_API_KEY,
       google: session.apiKeys?.google || process.env.GEMINI_API_KEY,
     };
-    const blogId = config?.categoryBlogMap[body.category];
+    const primaryBlogName = process.env.PRIMARY_BLOGGER_NAME?.trim() || "장학짱";
+    const blogId = hasDatabase()
+      ? await resolveBloggerBlogIdByName(primaryBlogName)
+      : config?.categoryBlogMap[body.category];
     const performanceGuidance = hasDatabase()
       ? await getPerformanceGuidance(blogId)
       : null;
