@@ -573,7 +573,7 @@ export async function createCategoryStage(
     max_output_tokens: 9000,
     input: `오늘 기준 한국의 공개 검색 관심 신호를 조사해 Google Blogger 카테고리 후보만 선정한다. 아직 키워드나 글 방향은 만들지 않는다.
 
-요청 카테고리: 최대 ${settings.categoryCount}개. 내부적으로 최소 ${settings.categoryCount * 2}개 후보를 검토하고 최종 후보만 출력한다. 카테고리 수가 1개여도 실시간 관심형을 먼저 검토하며, 전체의 약 40%(최소 ${realtimeTarget}개)는 realtime으로 우선 선정한다. realtime은 사건·방송·공연·영화·음악·스포츠 일정·결과·기록·공식 발표처럼 1시간~7일 동안 관심이 집중되는 주제다. evergreen은 3개월 이상 반복 검색될 문제다.
+요청 카테고리: 최종 최대 ${settings.categoryCount}개. 이번 응답에는 후보를 최대 ${Math.min(20, Math.max(settings.categoryCount * 2, settings.categoryCount + 3))}개까지 출력한다. 서버가 독립 근거 출처와 점수 형식을 검증한 뒤 최종 수량만 선정한다. 카테고리 수가 1개여도 실시간 관심형을 먼저 검토하며, 전체의 약 40%(최소 ${realtimeTarget}개)는 realtime으로 우선 선정한다. realtime은 사건·방송·공연·영화·음악·스포츠 일정·결과·기록·공식 발표처럼 1시간~7일 동안 관심이 집중되는 주제다. evergreen은 3개월 이상 반복 검색될 문제다.
 
 블로그 수를 늘리지 않도록 독자 목적이 비슷한 카테고리를 3~4개씩 같은 blogGroupId로 묶는다. 전체 수량상 불가피할 때만 2개 묶음을 허용한다. 서로 완전히 무관한 주제는 한 묶음에 넣지 않는다. 블로그 이름은 특정 카테고리에 종속되지 않는 '오늘의 똑똑이', '알쓸 똑똑이' 같은 중립적인 브랜드형 이름으로 제안한다. 같은 blogGroupId의 카테고리는 추천 이름·소개·주소 후보가 모두 같아야 한다.
 
@@ -593,37 +593,58 @@ JSON만 출력한다: {"weekLabel":"YYYY-MM-DD 시작 주간","marketSummary":"�
     !value?.weekLabel ||
     !Array.isArray(value.categories) ||
     !value.categories.length ||
-    value.categories.length > settings.categoryCount
+    value.categories.length > Math.min(20, Math.max(settings.categoryCount * 2, settings.categoryCount + 3))
   )
     throw new Error("카테고리 단계 결과의 수량 또는 형식이 올바르지 않습니다.");
   assignSharedBlogGroups(value.categories);
   const seen = new Set<string>();
+  const eligibleCategories: any[] = [];
   for (const category of value.categories) {
     const key = normalized(category?.name || "");
-    if (!key || seen.has(key))
-      throw new Error("카테고리 단계에 빈 이름 또는 중복 이름이 있습니다.");
+    if (!key || seen.has(key)) continue;
     seen.add(key);
-    if (!["evergreen", "realtime"].includes(category.contentMode))
-      throw new Error(`${category.name}: 콘텐츠 트랙이 없습니다.`);
-    for (const scoreName of [
-      "demand",
-      "momentum",
-      "durability",
-      "accessibility",
-      "adSafety",
-      "sourceability",
-    ])
-      score(category.scores?.[scoreName], `${category.name}.${scoreName}`);
-    if (!validEvidence(category.evidence))
-      throw new Error(`${category.name}: 독립 근거 출처가 2곳 미만입니다.`);
+    if (!["evergreen", "realtime"].includes(category.contentMode)) continue;
+    let scoresValid = true;
+    try {
+      for (const scoreName of [
+        "demand",
+        "momentum",
+        "durability",
+        "accessibility",
+        "adSafety",
+        "sourceability",
+      ])
+        score(category.scores?.[scoreName], `${category.name}.${scoreName}`);
+    } catch {
+      scoresValid = false;
+    }
+    if (!scoresValid || !validEvidence(category.evidence)) continue;
     category.keywords = [];
+    eligibleCategories.push(category);
   }
+  eligibleCategories.sort(
+    (a, b) =>
+      Number(b.contentMode === "realtime") -
+        Number(a.contentMode === "realtime") ||
+      Number(b.scores?.sourceability || 0) -
+        Number(a.scores?.sourceability || 0) ||
+      Number(b.scores?.demand || 0) - Number(a.scores?.demand || 0),
+  );
+  const selectedCategories = eligibleCategories.slice(0, settings.categoryCount);
+  if (!selectedCategories.length)
+    throw new Error(
+      "독립 근거 출처 2곳 이상을 확보한 카테고리가 없습니다. 다음 실행에서 후보를 다시 조사합니다.",
+    );
   if (
-    !value.categories.some(
+    !selectedCategories.some(
       (category: any) => category.contentMode === "realtime",
     )
   )
-    throw new Error("실시간 관심 카테고리를 확보하지 못했습니다.");
+    throw new Error(
+      "독립 근거를 확보한 실시간 관심 카테고리가 없습니다. 다음 실행에서 실시간 후보를 다시 조사합니다.",
+    );
+  value.categories = selectedCategories;
+  assignSharedBlogGroups(value.categories);
   return {
     draft: value,
     sources: extractCitations(response),
