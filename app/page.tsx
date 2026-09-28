@@ -1342,6 +1342,39 @@ export default function Home() {
     }
   }
 
+  async function runDailyNow() {
+    if (!window.confirm("일일 자동화를 지금 실행할까요? 예약 실행과 같은 작업을 즉시 수행합니다."))
+      return;
+    setBusy("일일 자동화 수동 실행 중");
+    setMessage("");
+    try {
+      const response = await fetch("/api/automation/run-daily", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await readApiJson(response);
+      if (!response.ok)
+        throw new Error(data.error || "일일 자동화 수동 실행 실패");
+      await refreshAutomationStatus(true);
+      if (data.skipped) {
+        setMessage(
+          `일일 자동화 실행은 건너뛰었습니다: ${data.reason || "실행 조건 미충족"}`,
+        );
+      } else {
+        const processed = Number(data.processed || 0);
+        const syncedDrafts = Number(data.syncedDrafts || 0);
+        const deferred = Number(data.deferred || 0);
+        setMessage(
+          `일일 자동화를 완료했습니다. 새 처리 ${processed}건 · Blogger 임시저장 동기화 ${syncedDrafts}건${deferred ? ` · 다음 실행 이월 ${deferred}건` : ""}.`,
+        );
+      }
+    } catch (error: any) {
+      setMessage(error?.message || "일일 자동화를 수동 실행하지 못했습니다.");
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function produceOne(
     taskId: string,
     recoveryMode?:
@@ -3191,6 +3224,21 @@ export default function Home() {
             disabled={!!busy || !automation.configured}
           >
             수량·자동화 설정 저장
+          </button>
+          <button
+            onClick={runDailyNow}
+            disabled={
+              !!busy ||
+              !automation.configured ||
+              !automation.readyForUnattendedRun
+            }
+            title={
+              automation.readyForUnattendedRun
+                ? "예약 실행과 동일한 일일 자동화를 지금 즉시 실행합니다."
+                : "무인 운영 준비 상태를 모두 정상으로 만든 뒤 실행할 수 있습니다."
+            }
+          >
+            일일 자동화 지금 실행
           </button>
           <button
             className="primary"
