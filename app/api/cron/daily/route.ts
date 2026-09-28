@@ -41,8 +41,7 @@ export async function GET(req: NextRequest) {
     const config = await getAutomationConfig();
     const primaryBlogName = process.env.PRIMARY_BLOGGER_NAME?.trim() || "장학짱";
     let primaryBlogId: string | null = null;
-    const resolveTargetBlogId = async (job: any) => {
-      if (job.blog_id) return String(job.blog_id);
+    const resolveTargetBlogId = async (_job?: any) => {
       if (!primaryBlogId)
         primaryBlogId = await resolveBloggerBlogIdByName(primaryBlogName);
       return primaryBlogId;
