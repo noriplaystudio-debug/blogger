@@ -80,6 +80,20 @@ export async function listCurrentUserBlogs(auth: any) {
   return (Array.isArray(data?.items) ? data.items : []) as BloggerListItem[];
 }
 
+
+export async function resolveBloggerBlogIdByName(name: string) {
+  const target = String(name || "").trim();
+  if (!target) throw new Error("기본 Blogger 이름이 비어 있습니다.");
+  const auth = await getAuthorizedClient();
+  const blogs = await listCurrentUserBlogs(auth);
+  const matched = blogs.find(
+    (blog) => String(blog.name || "").trim().toLowerCase() === target.toLowerCase(),
+  );
+  if (!matched?.id)
+    throw new Error(`기본 Blogger '${target}'을 찾지 못했습니다. Google 계정의 Blogger 목록을 확인하세요.`);
+  return String(matched.id);
+}
+
 export function safeGoogleApiDiagnostic(error: any) {
   const first = error?.response?.data?.error?.errors?.[0] || {};
   return {
