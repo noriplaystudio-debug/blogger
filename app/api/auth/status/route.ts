@@ -9,7 +9,13 @@ export async function GET() {
   let googleConnected = false;
   if (hasDatabase()) {
     try {
-      googleConnected = await hasStoredGoogleCredentials();
+      // Status is polled by unattended clients and must never hang on a
+      // sleeping/unreachable database. A short timeout keeps the handoff
+      // endpoint responsive while conservatively reporting disconnected.
+      googleConnected = await Promise.race([
+        hasStoredGoogleCredentials(),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 1500)),
+      ]);
     } catch {
       googleConnected = false;
     }
