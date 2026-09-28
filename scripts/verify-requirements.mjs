@@ -48,6 +48,9 @@ const files = {
   errorPage: read("app/error.tsx"),
   planCache: read("app/api/weekly-plan/cache/route.ts"),
   package: read("package.json"),
+  naver: read("lib/naver.ts"),
+  naverApi: read("app/api/naver/rewrite/route.ts"),
+  naverBridge: read("scripts/naver-bridge.mjs"),
 };
 
 let malformedJsonRepairWorks = false;
@@ -59,6 +62,26 @@ try {
 } catch {}
 
 const checks = [
+  [
+    "네이버 변환·임시저장 Blogger 격리",
+    files.naverApi.includes("NAVER_BRIDGE_REQUIRED") &&
+      files.naverApi.includes("NAVER_DRAFT_SAVED") &&
+      files.naverApi.includes("postToLocalBridge") &&
+      !files.naverApi.includes("/api/publish") &&
+      files.page.includes("네이버용 변환·임시저장"),
+  ],
+  [
+    "네이버 해요체·기호 문체",
+    files.naver.includes("해요체") &&
+      files.naver.includes("이모티콘") &&
+      files.naver.includes("Blogger 글을 그대로 복사"),
+  ],
+  [
+    "네이버 브라우저 브리지 저장공간 최소화",
+    files.naverBridge.includes("127.0.0.1") &&
+      files.naverBridge.includes("임시저장") &&
+      files.page.includes("workspace/localStorage에 추가 저장하지 않는다"),
+  ],
   [
     "GPT·Claude·Gemini 모델",
     ["gpt-5.6-terra", "claude-sonnet-5", "gemini-3.1-pro-preview"].every((x) =>

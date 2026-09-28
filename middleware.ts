@@ -1,4 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";const SESSION_COOKIE = "blogger_agent_auth";
+import { NextRequest, NextResponse } from "next/server";
+
+const SESSION_COOKIE = "blogger_agent_auth";
 const SESSION_MESSAGE = "blogger-agent-dashboard-v1";
 
 function withSecurityHeaders(response: NextResponse) {
@@ -42,6 +44,14 @@ function loginPage(message = "") {
 
 export async function middleware(req: NextRequest) {
   if (req.nextUrl.pathname.startsWith("/api/cron/")) return NextResponse.next();
+
+  // These endpoints intentionally remain reachable without a dashboard
+  // cookie. They either report non-secret auth handoff state or require the
+  // separate REPORT_ACCESS_TOKEN for unattended read-only reporting.
+  if (req.nextUrl.pathname === "/api/auth/status")
+    return withSecurityHeaders(NextResponse.next());
+  if (req.nextUrl.pathname === "/api/reports/latest")
+    return withSecurityHeaders(NextResponse.next());
 
   // Google redirects back here from accounts.google.com as a top-level
   // navigation. The OAuth state and iron-session cookie validate this route;

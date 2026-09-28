@@ -182,6 +182,7 @@ Google은 승인에 필요한 공식 글 개수를 제시하지 않으므로 20~
 - 글은 서로 다른 출처 2곳 이상, 1차 출처 1곳 이상, 출처에 직접 연결된 검증 주장 3개 이상이 없으면 작성하지 않습니다. 검수 점수뿐 아니라 본문에 조사 출처 링크가 실제로 포함됐는지도 코드가 확인합니다.
 - Blogger에 전달되는 HTML은 허용된 제목·문단·목록·강조·인용·링크·표 태그만 남기고 스크립트, 이벤트 속성, 위험한 링크를 제거합니다.
 - 운영 배포에서는 `APP_PASSWORD`, 32자 이상의 `SESSION_PASSWORD`, 32자 이상의 `APP_ENCRYPTION_KEY`가 없으면 안전하게 중단됩니다. 변경 API는 다른 출처의 브라우저 요청을 거부합니다.
+- 예약 보고(일일보고·주간 수익 사령탑)는 브라우저의 `blogger_agent_auth` 쿠키를 사용하지 않습니다. Vercel Production에 `REPORT_ACCESS_TOKEN`(32자 이상의 별도 무작위 값)을 설정하면 전용 읽기 전용 `/api/reports/latest` 경로가 활성화됩니다. 이 경로는 글 본문·API 키·OAuth 토큰을 반환하지 않습니다.
 - `무인 운영 준비 상태`에서 데이터베이스, 서버 API 키, Google 장기 연결, Cron 보안키, 운영 보안키, Blogger 매핑을 한 번에 확인할 수 있습니다.
 
 처음 사용할 때 Google Cloud Console에서 **AdSense Management API**를 활성화한 뒤 앱의 `Google Blogger 연결`을 다시 눌러 읽기 전용 AdSense 권한에 동의하세요. 사령탑의 숫자 수집은 Google API가 담당하고, 전략 해석은 외부 OpenAI API를 포트폴리오 전체에 주 1회 사용합니다.
@@ -243,7 +244,7 @@ Google 계정으로 로그인했는지 확인하세요.
 
 1. 이 프로젝트를 Vercel에 배포합니다.
 2. Vercel Marketplace의 관리형 PostgreSQL(예: Neon)을 연결해 `DATABASE_URL`을 만듭니다.
-3. `.env.example`에 표시된 환경변수를 Vercel Project Settings에 등록합니다. `CRON_SECRET`, `APP_ENCRYPTION_KEY`, `SESSION_PASSWORD`는 서로 다른 32자 이상의 무작위 문자열을 사용하고, `APP_PASSWORD`에는 모바일에서 대시보드에 접속할 암호를 넣습니다.
+3. `.env.example`에 표시된 환경변수를 Vercel Project Settings에 등록합니다. `CRON_SECRET`, `REPORT_ACCESS_TOKEN`, `APP_ENCRYPTION_KEY`, `SESSION_PASSWORD`는 서로 다른 32자 이상의 무작위 문자열을 사용하고, `APP_PASSWORD`에는 모바일에서 대시보드에 접속할 암호를 넣습니다. 예: `openssl rand -hex 32`를 네 번 실행해 각각 다른 값을 생성합니다.
 4. Google OAuth 리디렉션 URI를 배포 주소의 `/api/auth/google/callback`으로 바꾸고 앱에서 Blogger를 다시 연결합니다. 오프라인 refresh token은 암호화되어 DB에 저장됩니다.
 5. 화면에서 수량, 작성·검수 모델, 카테고리별 Blogger, 문체를 정한 뒤 `수량·자동화 설정 저장`을 누릅니다.
 6. `vercel.json`의 예약이 주간 조사와 일일 작성을 호출합니다. 호스팅 요금제의 함수 최대 실행시간과 Cron 빈도 제한은 배포 전에 확인하세요.
@@ -279,3 +280,16 @@ npm audit --omit=dev
 ## 로컬과 배포의 차이
 
 `DATABASE_URL`이 없으면 브라우저 저장소와 별도로 운영체제의 로컬 데이터 폴더에 계획·작업 상태·최신 검색 원본을 보관하고 수동 버튼으로 실행합니다. Windows의 기본 저장 위치는 `%LOCALAPPDATA%\BloggerWritingAgent`이며, 프로젝트 ZIP을 덮어쓰거나 폴더명을 변경해도 유지됩니다. 데이터베이스와 예약 환경변수를 갖춘 배포에서는 같은 정보를 PostgreSQL에 저장하고 화면을 열지 않아도 자동으로 실행됩니다. 실제 공개 발행만 사람 승인을 유지합니다.
+# 네이버용 변환·임시저장 브리지
+
+네이버는 공식 블로그 글쓰기 API가 종료되어 Blogger 자동등록과 분리된 PC 브라우저 보조 기능으로 동작합니다. Blogger 예약 작업에는 네이버 브리지 실패가 전달되지 않습니다.
+
+1. PC에서 Chrome을 네이버 계정으로 로그인합니다.
+2. Chrome을 원격 디버깅 포트로 실행합니다. 기존 Chrome이 열려 있으면 먼저 종료한 뒤 실행해야 합니다.
+   - Windows 예시: `chrome.exe --remote-debugging-port=9222 --user-data-dir="%TEMP%\\blogger-naver-profile"`
+3. 해당 Chrome에서 `https://blog.naver.com/PostWriteForm.naver`를 열고 로그인·보안 확인을 마칩니다.
+4. 새 CMD에서 `npm run naver:bridge`를 실행합니다.
+5. 로컬 `.env.local`에 `NAVER_BRIDGE_URL=http://127.0.0.1:3210`을 넣고 Next 앱을 다시 시작합니다.
+6. 제작 대기열의 `네이버용 변환·임시저장` 버튼을 누릅니다.
+
+브리지는 비밀번호를 읽거나 저장하지 않고, 로그인된 Chrome 탭의 편집기 입력과 저장 버튼만 수행합니다. 브리지가 꺼져 있거나 편집기 구조가 바뀌면 해당 네이버 작업만 실패하며 Blogger 자동 발행·예약·게시글 기록에는 영향을 주지 않습니다. 원문과 네이버 변환 본문은 workspace/localStorage에 별도 누적하지 않고 버튼 실행 중 메모리에서만 전달합니다.

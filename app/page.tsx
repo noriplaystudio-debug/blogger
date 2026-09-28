@@ -594,6 +594,7 @@ export default function Home() {
   const [compareSources, setCompareSources] = useState("");
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
+  const [naverStatus, setNaverStatus] = useState<Record<string, string>>({});
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchStopRequested, setBatchStopRequested] = useState(false);
   const [automation, setAutomation] = useState<Automation>({
@@ -1606,6 +1607,57 @@ export default function Home() {
       );
     } catch (error: any) {
       setMessage(error?.message || "Blogger 임시글을 저장하지 못했습니다.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function createNaverDraft(task: Task) {
+    if (!task.article) return;
+    setBusy("네이버용 글 재작성·임시저장 중");
+    setNaverStatus((current) => ({ ...current, [task.id]: "working" }));
+    try {
+      const response = await fetch("/api/naver/rewrite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jobId: task.id,
+          category: task.category,
+          keyword: task.keyword,
+          article: task.article,
+        }),
+      });
+      const data = await readApiJson(response);
+      if (!response.ok && !data.naverArticle)
+        throw new Error(data.error || "네이버용 글 변환에 실패했습니다.");
+      if (data.naverArticle) {
+        // 원문·변환문은 workspace/localStorage에 추가 저장하지 않는다.
+        // 선택한 순간의 브라우저 작업에만 사용해 저장공간 누적을 막는다.
+        setNaverStatus((current) => ({
+          ...current,
+          [task.id]: data.code === "NAVER_DRAFT_SAVED" ? "saved" : "rewritten",
+        }));
+      }
+      if (data.code === "NAVER_BRIDGE_REQUIRED") {
+        window.open(data.editorUrl, "_blank", "noopener,noreferrer");
+        try {
+          await navigator.clipboard.writeText(
+            String(data.naverArticle.html || "").replace(/<[^>]+>/g, " "),
+          );
+        } catch {
+          // 브리지 미설정 시에도 편집기만 열고 사용자가 붙여넣을 수 있게 한다.
+        }
+        setMessage(
+          "네이버용 글로 변환했습니다. PC 로컬 브리지를 실행하면 자동 임시저장되고, 지금은 네이버 편집기를 열었습니다.",
+        );
+      } else if (data.code === "NAVER_DRAFT_SAVED") {
+        setMessage("네이버용 글을 재작성하고 임시저장했습니다. Blogger 작업에는 영향을 주지 않았습니다.");
+      } else {
+        throw new Error(data.error || "네이버 임시저장 브리지 설정이 필요합니다.");
+      }
+    } catch (error: any) {
+      setNaverStatus((current) => ({ ...current, [task.id]: "error" }));
+      setMessage(error?.message || "네이버용 글 임시저장에 실패했습니다.");
     } finally {
       setBusy("");
     }
@@ -3425,6 +3477,11 @@ export default function Home() {
               일시정지는 진행 중인 API 요청 1개를 안전하게 마친 뒤 적용됩니다.
               완료된 글은 유지되고 오류·미시작 글만 다음 실행 대상으로 남습니다.
             </small>
+            <small className="taskHint">
+              네이버 자동 임시저장은 PC 로컬 앱에서 Chrome 원격 브리지
+              (`npm run naver:bridge`)를 실행한 경우에만 동작합니다. 네이버
+              브리지 오류는 Blogger 예약·자동 공개와 분리됩니다.
+            </small>
             <div className="queue">
               {tasks.map((task) => (
                 <article key={task.id} className={`task task-${task.state}`}>
@@ -3886,6 +3943,22 @@ export default function Home() {
                         </button>
                       </>
                     )}
+                    {task.article &&
+                      ["ready", "draft", "published", "needs_review"].includes(
+                        task.state,
+                      ) && (
+                        <button
+                          onClick={() => createNaverDraft(task)}
+                          disabled={!!busy}
+                          title="Blogger 원문을 네이버용 해요체·이모티콘 문체로 변환합니다."
+                        >
+                          {naverStatus[task.id] === "saved"
+                            ? "네이버 임시저장 완료"
+                            : naverStatus[task.id] === "working"
+                              ? "네이버 변환 중"
+                              : "네이버용 변환·임시저장"}
+                        </button>
+                      )}
                   </div>
                 </article>
               ))}

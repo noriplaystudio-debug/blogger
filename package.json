@@ -6,6 +6,7 @@
     "dev": "next dev --port 3000",
     "build": "next build",
     "start": "next start --port 3000",
+    "naver:bridge": "node scripts/naver-bridge.mjs",
     "verify": "node scripts/verify-requirements.mjs && node scripts/verify-api-contracts.mjs && node --import tsx scripts/verify-production-resilience.ts",
     "check": "npm run verify && npm run build"
   },
@@ -26,6 +27,7 @@
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.9",
     "prettier": "^3.9.6",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.2"
   },
   "overrides": {

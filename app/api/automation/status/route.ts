@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { providerFor } from "@/lib/models";
+import { reportTokenConfigured } from "@/lib/report-auth";
 import {
   getAutomationConfig,
   getOperationalStats,
@@ -101,6 +102,14 @@ export async function GET() {
         label: "예약 실행 보안키",
         ready: Boolean(process.env.CRON_SECRET),
         detail: process.env.CRON_SECRET ? "설정됨" : "CRON_SECRET 필요",
+      },
+      {
+        id: "report-auth",
+        label: "예약 보고 인증키",
+        ready: reportTokenConfigured(),
+        detail: reportTokenConfigured()
+          ? "REPORT_ACCESS_TOKEN 설정됨"
+          : "REPORT_ACCESS_TOKEN 필요",
       },
       {
         id: "security",

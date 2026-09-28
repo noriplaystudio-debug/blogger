@@ -7,6 +7,7 @@ import {
 import { getLocalAgentState } from "@/lib/local-state";
 import { getSession } from "@/lib/session";
 import { providerFor } from "@/lib/models";
+import { reportTokenConfigured } from "@/lib/report-auth";
 import { getAutomationConfig, getWorkspace, hasDatabase } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
@@ -48,6 +49,18 @@ export async function GET(req: NextRequest) {
       detail: hasDatabase()
         ? "데이터베이스 연결 정상"
         : `로컬 저장소 읽기 정상${local?.savedAt && local.savedAt !== new Date(0).toISOString() ? ` · 마지막 저장 ${local.savedAt}` : ""}`,
+    });
+
+    checks.push({
+      id: "unattended-report-auth",
+      label: "예약 보고 인증",
+      status: reportTokenConfigured() ? "pass" : "warning",
+      detail: reportTokenConfigured()
+        ? "예약 보고 전용 인증키 확인됨"
+        : "REPORT_ACCESS_TOKEN이 없습니다.",
+      action: reportTokenConfigured()
+        ? undefined
+        : "Vercel Production 환경변수에 32자 이상의 REPORT_ACCESS_TOKEN을 설정하세요.",
     });
 
     const openaiReady = Boolean(
