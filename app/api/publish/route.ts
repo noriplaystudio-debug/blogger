@@ -3,6 +3,7 @@ import { google } from "googleapis";
 import {
   createBloggerDraft,
   getAuthorizedClient,
+  resolveBloggerBlogIdByName,
   updateBloggerDraft,
 } from "@/lib/google";
 import { sanitizeArticleHtml, sanitizeArticleTitle } from "@/lib/editorial";
@@ -78,7 +79,7 @@ export async function POST(req: NextRequest) {
   try {
     const {
       action = "draft",
-      blogId,
+      blogId: requestedBlogId,
       postId,
       jobId,
       title,
@@ -86,19 +87,10 @@ export async function POST(req: NextRequest) {
       labels,
       article,
     } = await req.json();
-    if (!blogId)
-      return NextResponse.json(
-        { error: "블로그 정보가 부족합니다." },
-        { status: 400 },
-      );
+    const primaryBlogName = process.env.PRIMARY_BLOGGER_NAME?.trim() || "장학짱";
+    const blogId = await resolveBloggerBlogIdByName(primaryBlogName);
     const job =
       jobId && hasDatabase() ? await getJobPublicationContext(jobId) : null;
-    if (job?.blogId && job.blogId !== blogId)
-      return NextResponse.json(
-        { error: "작업에 연결된 Blogger와 요청한 Blogger가 다릅니다." },
-        { status: 409 },
-      );
-
     if (action === "publish") {
       const publicationArticle = job?.article || article;
       if (realtimeArticleIsStale(publicationArticle))
@@ -142,6 +134,7 @@ export async function POST(req: NextRequest) {
         await updateJob(jobId, {
           state: "published",
           bloggerPostId: data.id || postId,
+          blogId,
         });
       if (hasDatabase())
         await recordAuditEvent({
@@ -207,6 +200,7 @@ export async function POST(req: NextRequest) {
           ? { ...article, title: safeTitle, html: safeHtml }
           : { title: safeTitle, html: safeHtml, labels },
         bloggerPostId: post.id,
+        blogId,
       });
     if (hasDatabase())
       await recordAuditEvent({
