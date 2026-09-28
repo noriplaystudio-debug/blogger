@@ -1342,16 +1342,6 @@ export default function Home() {
     }
   }
 
-  async function runWeeklyNow() {
-    if (!window.confirm("이번 주 자동 조사·계획 생성을 지금 실행할까요?"))
-      return;
-    // Reuse the proven staged planner used by the normal dashboard flow.
-    // Each category/keyword/angle request is short and progress is saved after
-    // every successful stage, so a mobile/network interruption can resume from
-    // the last completed point instead of losing the whole weekly run.
-    await createPlan();
-  }
-
   async function runDailyNow() {
     if (!window.confirm("일일 자동화를 지금 실행할까요? 예약 실행과 같은 작업을 즉시 수행합니다."))
       return;
@@ -3236,21 +3226,6 @@ export default function Home() {
             수량·자동화 설정 저장
           </button>
           <button
-            onClick={runWeeklyNow}
-            disabled={
-              !!busy ||
-              !automation.configured ||
-              !automation.readyForUnattendedRun
-            }
-            title={
-              automation.readyForUnattendedRun
-                ? "예약 실행과 동일한 주간 조사·계획 생성을 지금 실행합니다."
-                : "무인 운영 준비 상태를 모두 정상으로 만든 뒤 실행할 수 있습니다."
-            }
-          >
-            주간 계획 지금 생성
-          </button>
-          <button
             onClick={runDailyNow}
             disabled={
               !!busy ||
@@ -3271,8 +3246,8 @@ export default function Home() {
             disabled={!!busy || !settings.connected.openai}
           >
             {planningRun?.settingsSignature === workflowSignature(workflow)
-              ? "저장된 지점부터 계획 계속 만들기"
-              : "새로 웹 조사해 계획 만들기"}
+              ? "저장된 지점부터 주간 계획 계속"
+              : "주간 계획 지금 생성"}
           </button>
           {planningRun && (
             <button
