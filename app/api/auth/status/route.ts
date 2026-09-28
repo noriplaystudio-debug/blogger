@@ -1,25 +1,13 @@
 import { NextResponse } from "next/server";
-import { hasDatabase, hasStoredGoogleCredentials } from "@/lib/store";
 import { reportTokenConfigured } from "@/lib/report-auth";
 
 export const dynamic = "force-dynamic";
 
 /** Public, non-secret handoff status used to show the user when interaction is needed. */
 export async function GET() {
-  let googleConnected = false;
-  if (hasDatabase()) {
-    try {
-      // Status is polled by unattended clients and must never hang on a
-      // sleeping/unreachable database. A short timeout keeps the handoff
-      // endpoint responsive while conservatively reporting disconnected.
-      googleConnected = await Promise.race([
-        hasStoredGoogleCredentials(),
-        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 1500)),
-      ]);
-    } catch {
-      googleConnected = false;
-    }
-  }
+  // Keep this lightweight probe independent from the database. The dashboard
+  // remains the source of truth for the detailed Google connection state.
+  const googleConnected: boolean | null = null;
   return NextResponse.json(
     {
       dashboardLoginUrl: "/login",
@@ -27,10 +15,10 @@ export async function GET() {
       googleConnected,
       reportAccessConfigured: reportTokenConfigured(),
       needsUserAction:
-        !process.env.APP_PASSWORD || !googleConnected || !reportTokenConfigured(),
+        !process.env.APP_PASSWORD || !reportTokenConfigured(),
       actions: {
         dashboardLogin: !process.env.APP_PASSWORD ? "Vercel APP_PASSWORD 설정" : "/login",
-        googleOAuth: googleConnected ? null : "/api/auth/google",
+        googleOAuth: "/api/auth/google",
         unattendedReports: reportTokenConfigured()
           ? null
           : "Vercel REPORT_ACCESS_TOKEN 설정",
