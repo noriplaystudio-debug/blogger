@@ -115,6 +115,55 @@ export async function POST(req: NextRequest) {
       ).values(),
     ];
 
+    const existingProgress = hasDatabase()
+      ? await getWeeklyPlanningProgress(planningRunKey)
+      : null;
+
+    if (existingProgress?.draft) {
+      if (phase === "categories") {
+        return NextResponse.json({
+          phase,
+          draft: existingProgress.draft,
+          sources: existingProgress.sources || [],
+          settings: planningSettings,
+          resumed: true,
+        });
+      }
+      if (phase === "keywords" && requested.category?.name) {
+        const cachedCategory = existingProgress.draft.categories?.find(
+          (category: any) => category.name === requested.category.name,
+        );
+        if (Array.isArray(cachedCategory?.keywords) && cachedCategory.keywords.length)
+          return NextResponse.json({
+            phase,
+            keywords: cachedCategory.keywords,
+            sources: existingProgress.sources || [],
+            resumed: true,
+          });
+      }
+      if (
+        phase === "angles" &&
+        requested.category?.name &&
+        requested.keyword?.keyword
+      ) {
+        const cachedCategory = existingProgress.draft.categories?.find(
+          (category: any) => category.name === requested.category.name,
+        );
+        const cachedKeyword = cachedCategory?.keywords?.find(
+          (keyword: any) => keyword.keyword === requested.keyword.keyword,
+        );
+        if (
+          Array.isArray(cachedKeyword?.angles) &&
+          cachedKeyword.angles.length === planningSettings.articlesPerKeyword
+        )
+          return NextResponse.json({
+            phase,
+            angles: cachedKeyword.angles,
+            resumed: true,
+          });
+      }
+    }
+
     if (phase === "categories" && config) {
       const reservation = await reserveEstimatedCost({
         jobId: `manual-weekly-plan:${manualRunId}`,
