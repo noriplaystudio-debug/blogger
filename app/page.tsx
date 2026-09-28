@@ -1345,31 +1345,11 @@ export default function Home() {
   async function runWeeklyNow() {
     if (!window.confirm("이번 주 자동 조사·계획 생성을 지금 실행할까요?"))
       return;
-    setBusy("주간 자동 조사·계획 생성 중");
-    setMessage("");
-    try {
-      const response = await fetch("/api/automation/run-weekly", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      const data = await readApiJson(response);
-      if (!response.ok)
-        throw new Error(data.error || "주간 자동 조사·계획 생성 실패");
-      await refreshAutomationStatus(true);
-      if (data.skipped) {
-        setMessage(
-          `주간 자동화 실행은 건너뛰었습니다: ${data.reason || "실행 조건 미충족"}`,
-        );
-      } else {
-        setMessage(
-          `주간 계획 생성을 완료했습니다. 카테고리 ${Number(data.categories || 0)}개 · 키워드 ${Number(data.keywords || 0)}개 · 글 작업 ${Number(data.articles || 0)}개를 만들었습니다.`,
-        );
-      }
-    } catch (error: any) {
-      setMessage(error?.message || "주간 자동화를 수동 실행하지 못했습니다.");
-    } finally {
-      setBusy("");
-    }
+    // Reuse the proven staged planner used by the normal dashboard flow.
+    // Each category/keyword/angle request is short and progress is saved after
+    // every successful stage, so a mobile/network interruption can resume from
+    // the last completed point instead of losing the whole weekly run.
+    await createPlan();
   }
 
   async function runDailyNow() {
