@@ -29,8 +29,9 @@ import {
   saveWeeklyPlanningProgress,
 } from "@/lib/store";
 
-// Vercel Hobby allows up to 60 seconds per function invocation.
-export const maxDuration = 60;
+// Staged research calls can legitimately exceed 60 seconds. Allow the same
+// execution window as the automatic weekly planner so each saved stage can finish.
+export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
 function strings(value: unknown, limit: number) {
