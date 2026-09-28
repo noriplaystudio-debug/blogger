@@ -52,6 +52,10 @@ export async function middleware(req: NextRequest) {
     return withSecurityHeaders(NextResponse.next());
   if (req.nextUrl.pathname === "/api/reports/latest")
     return withSecurityHeaders(NextResponse.next());
+  // Minimal read-only operational health endpoint for external monitoring.
+  // It intentionally exposes no article bodies, credentials, IDs, or titles.
+  if (req.nextUrl.pathname === "/api/automation/health")
+    return withSecurityHeaders(NextResponse.next());
 
   // Google redirects back here from accounts.google.com as a top-level
   // navigation. The OAuth state and iron-session cookie validate this route;
