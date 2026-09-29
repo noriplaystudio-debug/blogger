@@ -109,33 +109,61 @@ export async function POST(req: NextRequest) {
 
     const categoryNeedingKeywords = draft.categories?.find(
       (category: any) =>
-        !Array.isArray(category.keywords) || category.keywords.length === 0,
+        !category?.planningSkipped &&
+        (!Array.isArray(category.keywords) || category.keywords.length === 0),
     );
     if (categoryNeedingKeywords) {
-      const result = await createKeywordStage(process.env.OPENAI_API_KEY, {
-        category: categoryNeedingKeywords,
-        settings,
-        recentKeywords,
-        recentContent,
-      });
-      categoryNeedingKeywords.keywords = result.keywords;
-      sources = mergeSources(sources, result.sources || []);
-      await saveWeeklyPlanningProgress({
-        runKey,
-        weekStart: progress.weekStart,
-        mode: "manual",
-        settings,
-        draft,
-        sources,
-        status: "running",
-        error: null,
-        failures: 0,
-      });
-      await finishRun(automationRunId, "success", {
-        runKey,
-        phase: "keywords",
-        category: categoryNeedingKeywords.name,
-      });
+      try {
+        const result = await createKeywordStage(process.env.OPENAI_API_KEY, {
+          category: categoryNeedingKeywords,
+          settings,
+          recentKeywords,
+          recentContent,
+        });
+        categoryNeedingKeywords.keywords = result.keywords;
+        categoryNeedingKeywords.planningFailures = 0;
+        sources = mergeSources(sources, result.sources || []);
+        await saveWeeklyPlanningProgress({
+          runKey,
+          weekStart: progress.weekStart,
+          mode: "manual",
+          settings,
+          draft,
+          sources,
+          status: "running",
+          error: null,
+          failures: 0,
+        });
+        await finishRun(automationRunId, "success", {
+          runKey,
+          phase: "keywords",
+          category: categoryNeedingKeywords.name,
+        });
+      } catch (error: any) {
+        const failures = Number(categoryNeedingKeywords.planningFailures || 0) + 1;
+        categoryNeedingKeywords.planningFailures = failures;
+        if (failures >= 2) categoryNeedingKeywords.planningSkipped = true;
+        await saveWeeklyPlanningProgress({
+          runKey,
+          weekStart: progress.weekStart,
+          mode: "manual",
+          settings,
+          draft,
+          sources,
+          status: "running",
+          error: failures >= 2
+            ? `${categoryNeedingKeywords.name}: 키워드 검증 반복 실패로 이 후보만 제외하고 다음 후보로 진행합니다.`
+            : error?.message || "키워드 조사 실패",
+          failures: 0,
+        });
+        await finishRun(automationRunId, "partial", {
+          runKey,
+          phase: "keywords",
+          category: categoryNeedingKeywords.name,
+          skipped: failures >= 2,
+          error: error?.message || "keyword planning failed",
+        });
+      }
       await queueNext(req, runKey);
       return NextResponse.json({ ok: true, queued: true, phase: "keywords" });
     }
@@ -144,8 +172,9 @@ export async function POST(req: NextRequest) {
     for (const category of draft.categories || []) {
       for (const keyword of category.keywords || []) {
         if (
-          !Array.isArray(keyword.angles) ||
-          keyword.angles.length !== Number(settings.articlesPerKeyword)
+          !keyword?.planningSkipped &&
+          (!Array.isArray(keyword.angles) ||
+            keyword.angles.length !== Number(settings.articlesPerKeyword))
         ) {
           angleTarget = { category, keyword };
           break;
@@ -155,34 +184,74 @@ export async function POST(req: NextRequest) {
     }
 
     if (angleTarget) {
-      const result = await createAngleStage(process.env.OPENAI_API_KEY, {
-        category: angleTarget.category,
-        keyword: angleTarget.keyword,
-        settings,
-      });
-      angleTarget.keyword.angles = result.angles;
-      await saveWeeklyPlanningProgress({
-        runKey,
-        weekStart: progress.weekStart,
-        mode: "manual",
-        settings,
-        draft,
-        sources,
-        status: "running",
-        error: null,
-        failures: 0,
-      });
-      await finishRun(automationRunId, "success", {
-        runKey,
-        phase: "angles",
-        category: angleTarget.category.name,
-        keyword: angleTarget.keyword.keyword,
-      });
+      try {
+        const result = await createAngleStage(process.env.OPENAI_API_KEY, {
+          category: angleTarget.category,
+          keyword: angleTarget.keyword,
+          settings,
+        });
+        angleTarget.keyword.angles = result.angles;
+        angleTarget.keyword.planningFailures = 0;
+        await saveWeeklyPlanningProgress({
+          runKey,
+          weekStart: progress.weekStart,
+          mode: "manual",
+          settings,
+          draft,
+          sources,
+          status: "running",
+          error: null,
+          failures: 0,
+        });
+        await finishRun(automationRunId, "success", {
+          runKey,
+          phase: "angles",
+          category: angleTarget.category.name,
+          keyword: angleTarget.keyword.keyword,
+        });
+      } catch (error: any) {
+        const failures = Number(angleTarget.keyword.planningFailures || 0) + 1;
+        angleTarget.keyword.planningFailures = failures;
+        if (failures >= 2) angleTarget.keyword.planningSkipped = true;
+        await saveWeeklyPlanningProgress({
+          runKey,
+          weekStart: progress.weekStart,
+          mode: "manual",
+          settings,
+          draft,
+          sources,
+          status: "running",
+          error: failures >= 2
+            ? `${angleTarget.keyword.keyword}: 글 방향 생성 반복 실패로 이 키워드만 제외하고 계속 진행합니다.`
+            : error?.message || "글 방향 생성 실패",
+          failures: 0,
+        });
+        await finishRun(automationRunId, "partial", {
+          runKey,
+          phase: "angles",
+          category: angleTarget.category.name,
+          keyword: angleTarget.keyword.keyword,
+          skipped: failures >= 2,
+          error: error?.message || "angle planning failed",
+        });
+      }
       await queueNext(req, runKey);
       return NextResponse.json({ ok: true, queued: true, phase: "angles" });
     }
 
-    const plan = finalizeStagedPlan(draft, settings);
+    const finalDraft = {
+      ...draft,
+      categories: (draft.categories || [])
+        .filter((category: any) => !category?.planningSkipped)
+        .map((category: any) => ({
+          ...category,
+          keywords: (category.keywords || []).filter(
+            (keyword: any) => !keyword?.planningSkipped,
+          ),
+        }))
+        .filter((category: any) => category.keywords.length > 0),
+    };
+    const plan = finalizeStagedPlan(finalDraft, settings);
     const workspace = await persistWeeklyPlan(
       plan,
       sources,
