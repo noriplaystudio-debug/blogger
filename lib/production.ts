@@ -611,7 +611,7 @@ async function auditFinalEvidence(
   let previousFailure = "";
   const maxAttempts = input.angle?.contentMode === "realtime" ? 2 : 1;
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const response = await new OpenAI({ apiKey }).responses.create({
+    const response = await new OpenAI({ apiKey, timeout: 90000, maxRetries: 1 }).responses.create({
       model: process.env.RESEARCH_MODEL || "gpt-5.6-terra",
       tools: [{ type: "web_search" }],
       include: ["web_search_call.action.sources" as any],
@@ -1033,7 +1033,7 @@ async function researchArticleEvidence(apiKey: string, body: any) {
         ? ` 실시간 관심 글이다. 결과·일정·순위·발표 내용을 지금 다시 확인하고, 기준 시각·기준일과 이후 바뀔 수 있는 항목을 명시한다. 계획 당시 확인 시각은 ${body.angle.sourceCheckedAt || "미기록"}, 사건·경기·발표일은 ${body.angle.eventDate || "미지정"}, 현재성 확인 주기는 ${body.angle.freshnessWindowHours || 24}시간이다. 공식 발표와 신뢰할 수 있는 독립 보도를 우선하며 루머·사생활·피해자 신상·자극적 추측은 제외한다.`
         : "");
     try {
-      const response = await new OpenAI({ apiKey }).responses.create({
+      const response = await new OpenAI({ apiKey, timeout: 90000, maxRetries: 1 }).responses.create({
         model: process.env.RESEARCH_MODEL || "gpt-5.6-terra",
         tools: [{ type: "web_search" }],
         include: ["web_search_call.action.sources" as any],
