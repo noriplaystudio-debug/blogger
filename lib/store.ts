@@ -1148,6 +1148,7 @@ export async function reserveEstimatedCost(input: {
   kind: string;
   amountWon?: number;
   detail?: any;
+  enforceBudget?: boolean;
 }) {
   await ensureSchema();
   return db().begin(async (tx) => {
@@ -1163,6 +1164,7 @@ export async function reserveEstimatedCost(input: {
     const usedWon = Number(summary.used || 0);
     const budgetWon = Number(config.monthly_ai_budget_won || 0);
     if (
+      input.enforceBudget !== false &&
       config.pause_on_budget &&
       budgetWon > 0 &&
       usedWon + amountWon > budgetWon
