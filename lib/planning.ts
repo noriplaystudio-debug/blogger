@@ -112,17 +112,12 @@ function curatePlan(plan: any, settings: PlanningSettings) {
             },
         category.name || "카테고리",
       );
+      // Model-generated scores rank candidates, but should not act as brittle
+      // hard gates. Planning only needs a traceable public-interest signal and
+      // a minimally safe topic; article evidence is checked later.
       const categoryGate =
-        contentMode === "realtime"
-          ? categoryScore >= 52 &&
-            score(category.scores?.demand, "demand") >= 45 &&
-            score(category.scores?.momentum, "momentum") >= 50 &&
-            score(category.scores?.adSafety, "adSafety") >= 65 &&
-            score(category.scores?.sourceability, "sourceability") >= 45
-          : categoryScore >= 50 &&
-            score(category.scores?.durability, "durability") >= 40 &&
-            score(category.scores?.adSafety, "adSafety") >= 65 &&
-            score(category.scores?.sourceability, "sourceability") >= 40;
+        evidenceDomains(category.evidence).size >= 1 &&
+        score(category.scores?.adSafety, "adSafety") >= 55;
       if (!categoryGate) {
         rejected.push({
           type: "category",
@@ -170,26 +165,8 @@ function curatePlan(plan: any, settings: PlanningSettings) {
         .filter((keyword: any) => {
           const sourceDomains = evidenceDomains(keyword.evidence);
           const gatePassed =
-            contentMode === "realtime"
-              ? keyword.priorityScore >= 50 &&
-                score(keyword.scores?.demand, "keyword.demand") >= 45 &&
-                score(keyword.scores?.momentum, "keyword.momentum") >= 50 &&
-                score(keyword.scores?.sourceability, "keyword.sourceability") >=
-                  40 &&
-                score(keyword.scores?.uniqueValue, "keyword.uniqueValue") >=
-                  40 &&
-                score(keyword.scores?.topicalFit, "keyword.topicalFit") >= 50 &&
-                sourceDomains.size >= 1 &&
-                keyword.confidence !== "낮음"
-              : keyword.priorityScore >= 50 &&
-                score(keyword.scores?.durability, "keyword.durability") >= 35 &&
-                score(keyword.scores?.sourceability, "keyword.sourceability") >=
-                  40 &&
-                score(keyword.scores?.uniqueValue, "keyword.uniqueValue") >=
-                  40 &&
-                score(keyword.scores?.topicalFit, "keyword.topicalFit") >= 50 &&
-                sourceDomains.size >= 1 &&
-                keyword.confidence !== "낮음";
+            sourceDomains.size >= 1 &&
+            keyword.confidence !== "낮음";
           const overlaps = usedKeywords.some(
             (used) => phraseSimilarity(used, keyword.keyword || "") >= 0.72,
           );
@@ -202,8 +179,8 @@ function curatePlan(plan: any, settings: PlanningSettings) {
                 : sourceDomains.size < 1
                   ? "키워드 선정에 사용할 공개 관심 신호 링크를 확보하지 못함"
                   : contentMode === "realtime"
-                    ? "실시간 수요·상승세·출처·독창 가치 기준 미달"
-                    : "수요·지속성·출처·독창 가치 품질 기준 미달",
+                    ? "공개 관심 신호 또는 기본 형식 기준 미달"
+                    : "공개 관심 신호 또는 기본 형식 기준 미달",
             });
             return false;
           }
