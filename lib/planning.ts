@@ -325,6 +325,15 @@ export function validatePlan(
       throw new Error(
         `${category.name}: 키워드는 1~${settings.keywordsPerCategory}개여야 합니다.`,
       );
+    if (
+      category.keywords.length === 1 &&
+      category.keywords[0]?.singleKeywordCategory !== true &&
+      settings.keywordsPerCategory > 1
+    ) {
+      // One keyword is still allowed, but this flag distinguishes intentional
+      // consolidation from accidental underfilling.
+      category.keywords[0].singleKeywordCategory = false;
+    }
     let previousKeywordScore = Infinity;
     for (const keyword of category.keywords) {
       const keywordKey = normalized(keyword.keyword || "");
@@ -756,7 +765,25 @@ JSON만 출력한다: {"keywords":[{"keyword":"구체적 검색어","articleGrou
         Number(a.scores?.sourceability || 0) ||
       Number(b.scores?.demand || 0) - Number(a.scores?.demand || 0),
   );
-  const selected = consolidated.slice(0, settings.keywordsPerCategory);
+
+  const distinctGroupKeys = new Set(
+    consolidated.map((item) =>
+      String(item.articleGroupKey || item.umbrellaKeyword || item.keyword)
+        .trim()
+        .toLowerCase(),
+    ),
+  );
+  const selected =
+    consolidated.length > 0 && distinctGroupKeys.size === 1
+      ? [
+          {
+            ...consolidated[0],
+            articleCountOverride: 1,
+            clusterRole: "기둥글",
+            singleKeywordCategory: true,
+          },
+        ]
+      : consolidated.slice(0, settings.keywordsPerCategory);
   if (!selected.length)
     throw new Error(
       `${category.name}: 사전검증을 통과한 키워드를 확보하지 못했습니다. 자동 재조사 대상으로 넘깁니다.`,
