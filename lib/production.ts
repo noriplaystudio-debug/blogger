@@ -799,8 +799,8 @@ function validateDraft(
   }
   value.html = sanitizeArticleHtml(value.html);
   const textLength = value.html.replace(/<[^>]+>/g, " ").trim().length;
-  if (textLength < 450)
-    throw new Error("작성된 본문이 지나치게 짧아 저장하지 않았습니다.");
+  if (textLength < 1500)
+    throw new Error("작성된 본문이 1,500자 미만이라 보완이 필요합니다.");
   if (textLength > 7000)
     throw new Error(
       "본문이 지나치게 길어 응답 잘림 위험이 있습니다. 핵심 근거와 실행 정보만 남겨 다시 작성합니다.",
@@ -1246,7 +1246,7 @@ export async function produceArticle(
           jsonSchema: WRITER_RESPONSE_SCHEMA,
           schemaName: "blog_article",
           maxTokens: 4800,
-          prompt: `카테고리: ${body.category}\n핵심 키워드: ${body.keyword}\n검색 의도: ${body.intent}\n글 방향: ${body.angle.titleIdea}\n차별화 목적: ${body.angle.purpose}\n독자 질문: ${body.angle.searchQuestion || body.keyword}\n독자 상황: ${body.angle.readerSituation || "미지정"}\n답변 약속: ${body.angle.answerPromise || body.angle.purpose}\n필수 내용: ${JSON.stringify(body.angle.mustCover || [])}\n제외 범위: ${JSON.stringify(body.angle.exclusions || [])}\n계획된 독창 가치: ${body.angle.uniqueValue || "판단 기준과 실행 절차"}\n선택된 구성: ${structure}\n${recoveryInstruction}\n블로그 편집 가이드:\n${styleGuide}\n${performanceGuidance}\n검증 조사 문서:\n${research}\n\n검증된 출처 목록:\n${JSON.stringify(sources)}\n\n기존 글 제목과 요약(내용·제목·도입부를 반복하지 말 것):\n${JSON.stringify(existing)}\n${review?.issues?.length ? `\n이전 검수 문제를 모두 수정할 것:\n${review.issues.join("\n")}` : ""}${generationFailures.length ? `\n이전 생성 시 실패한 형식·길이 문제를 반복하지 말 것:\n${generationFailures.join("\n")}` : ""}\n\n[작성 전 근거 규칙]\n1. 조사 문서 coverage에서 supported=true이며 claimIds가 연결된 필수 내용만 확정적으로 쓴다.\n2. 모든 사실·날짜·수치·조건은 claims의 statement와 limitation 범위 안에서만 쓴다. claims에 없는 배경지식은 자연스러워 보여도 추가하지 않는다.\n3. conflicts는 어느 한쪽을 임의로 선택하지 말고 차이를 그대로 설명한다. unknowns는 확인된 사실처럼 바꾸지 않는다.\n4. 사실 문장 가까이에 해당 claim의 원문 링크를 자연스러운 앵커 문구로 연결한다.\n\n[제목 작성 기술]\n1. 먼저 direct_answer(답을 드러냄), conditional(대상·조건 명시), comparison(실제 비교축 명시), problem_solution(문제와 해결 결과 명시) 전략으로 제목 후보를 정확히 4개 만든다. 네 후보는 단어만 바꾼 변형이면 안 된다.\n2. 각 후보는 독자 질문 적합성, 약속하는 답, 과장·모호성·현재성 위험을 스스로 평가한다. 가장 자극적인 제목이 아니라 본문이 완전히 이행할 수 있고 기존 제목과 구별되는 제목을 선택한다.\n3. 제목은 12~70자, 한국어 본문과 같은 언어로 쓰고 핵심 키워드·동의어를 반복하지 않는다. 연도·가격·숫자는 조사 문서와 본문에서 현재 기준으로 확인된 경우에만 쓴다. 총정리·완벽 가이드·한눈에 보기·모르면 손해 같은 상투·공포 표현, 불필요한 괄호·구분자·감탄부호는 쓰지 않는다.\n4. 검색어를 그대로 나열하지 말고 대상, 조건, 판단 기준 또는 얻는 결과 중 이 글의 핵심을 구체적으로 드러낸다. 제목이 약속하지 않은 내용을 본문에 억지로 늘리지 않는다.\n\n[본문 작성 기술]\n1. 첫 문단 35~320자 안에서 질문에 바로 답하고, 적용 조건과 가장 중요한 예외를 함께 밝힌다. 인사·글 소개·목차 예고로 시작하지 않는다.\n2. 소제목은 '서론·본론·결론·정리·장점·단점'처럼 빈 라벨을 쓰지 말고, 해당 구획에서 독자가 얻게 될 답을 구체적으로 쓴다. 2~9개의 소제목으로 논리 순서를 만든다.\n3. 한 문단에는 하나의 핵심만 두고, 500자가 넘는 벽문단을 반복하지 않는다. 같은 뜻의 문장, 도입부 답의 단순 반복, 키워드의 기계적 반복을 제거한다.\n4. 사실 문장 가까이에 자연스러운 앵커 텍스트로 출처를 연결한다. 출처 목록만 끝에 몰아넣거나 URL을 그대로 앵커 텍스트로 쓰지 않는다. 조건·예외·출처 충돌과 확인 불가 사항을 해당 판단 지점에 배치한다.\n5. 검색 의도에 맞는 비교 기준·계산·체크리스트·의사결정 절차 중 하나를 완성된 형태로 제공한다. 예시는 실제 경험처럼 꾸미지 말고 가정임을 밝힌다.\n6. 마지막 구획에서는 본문을 되풀이하지 말고 독자가 지금 확인하거나 실행할 다음 행동, 적용되지 않는 경우, 재확인이 필요한 시점을 제시한다.\n7. 본문 순수 텍스트는 보통 1,500~5,000자로 제한한다. 정보가 충분하지 않은데 길이를 채우지 말고, 같은 설명을 반복하지 않는다.\n\n응답은 제공된 JSON 스키마를 정확히 따르고 설명 문장이나 코드펜스를 밖에 붙이지 않는다.`,
+          prompt: `카테고리: ${body.category}\n핵심 키워드: ${body.keyword}\n검색 의도: ${body.intent}\n글 방향: ${body.angle.titleIdea}\n차별화 목적: ${body.angle.purpose}\n독자 질문: ${body.angle.searchQuestion || body.keyword}\n독자 상황: ${body.angle.readerSituation || "미지정"}\n답변 약속: ${body.angle.answerPromise || body.angle.purpose}\n필수 내용: ${JSON.stringify(body.angle.mustCover || [])}\n제외 범위: ${JSON.stringify(body.angle.exclusions || [])}\n계획된 독창 가치: ${body.angle.uniqueValue || "판단 기준과 실행 절차"}\n선택된 구성: ${structure}\n${recoveryInstruction}\n블로그 편집 가이드:\n${styleGuide}\n${performanceGuidance}\n검증 조사 문서:\n${research}\n\n검증된 출처 목록:\n${JSON.stringify(sources)}\n\n기존 글 제목과 요약(내용·제목·도입부를 반복하지 말 것):\n${JSON.stringify(existing)}\n${review?.issues?.length ? `\n이전 검수 문제를 모두 수정할 것:\n${review.issues.join("\n")}` : ""}${generationFailures.length ? `\n이전 생성 시 실패한 형식·길이 문제를 반복하지 말 것:\n${generationFailures.join("\n")}` : ""}\n\n[작성 전 근거 규칙]\n1. 조사 문서 coverage에서 supported=true이며 claimIds가 연결된 필수 내용만 확정적으로 쓴다.\n2. 모든 사실·날짜·수치·조건은 claims의 statement와 limitation 범위 안에서만 쓴다. claims에 없는 배경지식은 자연스러워 보여도 추가하지 않는다.\n3. conflicts는 어느 한쪽을 임의로 선택하지 말고 차이를 그대로 설명한다. unknowns는 확인된 사실처럼 바꾸지 않는다.\n4. 사실 문장 가까이에 해당 claim의 원문 링크를 자연스러운 앵커 문구로 연결한다.\n\n[제목 작성 기술]\n1. 먼저 direct_answer(답을 드러냄), conditional(대상·조건 명시), comparison(실제 비교축 명시), problem_solution(문제와 해결 결과 명시) 전략으로 제목 후보를 정확히 4개 만든다. 네 후보는 단어만 바꾼 변형이면 안 된다.\n2. 각 후보는 독자 질문 적합성, 약속하는 답, 과장·모호성·현재성 위험을 스스로 평가한다. 가장 자극적인 제목이 아니라 본문이 완전히 이행할 수 있고 기존 제목과 구별되는 제목을 선택한다.\n3. 제목은 12~70자, 한국어 본문과 같은 언어로 쓰고 핵심 키워드·동의어를 반복하지 않는다. 연도·가격·숫자는 조사 문서와 본문에서 현재 기준으로 확인된 경우에만 쓴다. 총정리·완벽 가이드·한눈에 보기·모르면 손해 같은 상투·공포 표현, 불필요한 괄호·구분자·감탄부호는 쓰지 않는다.\n4. 검색어를 그대로 나열하지 말고 대상, 조건, 판단 기준 또는 얻는 결과 중 이 글의 핵심을 구체적으로 드러낸다. 제목이 약속하지 않은 내용을 본문에 억지로 늘리지 않는다.\n\n[본문 작성 기술]\n1. 첫 문단 35~320자 안에서 질문에 바로 답하고, 적용 조건과 가장 중요한 예외를 함께 밝힌다. 인사·글 소개·목차 예고로 시작하지 않는다.\n2. 소제목은 '서론·본론·결론·정리·장점·단점'처럼 빈 라벨을 쓰지 말고, 해당 구획에서 독자가 얻게 될 답을 구체적으로 쓴다. 2~9개의 소제목으로 논리 순서를 만든다.\n3. 한 문단에는 하나의 핵심만 두고, 500자가 넘는 벽문단을 반복하지 않는다. 같은 뜻의 문장, 도입부 답의 단순 반복, 키워드의 기계적 반복을 제거한다.\n4. 사실 문장 가까이에 자연스러운 앵커 텍스트로 출처를 연결한다. 출처 목록만 끝에 몰아넣거나 URL을 그대로 앵커 텍스트로 쓰지 않는다. 조건·예외·출처 충돌과 확인 불가 사항을 해당 판단 지점에 배치한다.\n5. 검색 의도에 맞는 비교 기준·계산·체크리스트·의사결정 절차 중 하나를 완성된 형태로 제공한다. 예시는 실제 경험처럼 꾸미지 말고 가정임을 밝힌다.\n6. 마지막 구획에서는 본문을 되풀이하지 말고 독자가 지금 확인하거나 실행할 다음 행동, 적용되지 않는 경우, 재확인이 필요한 시점을 제시한다.\n7. 본문 순수 텍스트는 반드시 1,500자 이상 5,000자 이하로 작성한다. 초안 단계부터 1,500자 미만으로 끝내지 않는다. 길이가 부족하면 조사 문서 안에서 확인 가능한 조건·예외·확인 절차·비교 기준·실행 단계를 구체화해 보완하되, 근거 없는 내용을 만들어 길이만 채우거나 같은 설명을 반복하지 않는다.\n\n응답은 제공된 JSON 스키마를 정확히 따르고 설명 문장이나 코드펜스를 밖에 붙이지 않는다.`,
         });
         let parsedDraft: Draft;
         try {
@@ -1309,12 +1309,66 @@ export async function produceArticle(
             },
           ];
         }
-        draft = validateDraft(
-          parsedDraft,
+        const requiredItems =
           researchDossier?.coverage
             ?.filter((item) => item.supported)
             .map((item) => item.requirement) ||
-            (Array.isArray(body.angle?.mustCover) ? body.angle.mustCover : []),
+          (Array.isArray(body.angle?.mustCover) ? body.angle.mustCover : []);
+        const draftTextLength = plainText(parsedDraft.html || "").length;
+        const coveredRequirements = new Set(
+          (Array.isArray(parsedDraft.coverageMap) ? parsedDraft.coverageMap : [])
+            .filter((item: any) => item?.addressed)
+            .map((item: any) => String(item.requirement || "").trim())
+            .filter(Boolean),
+        );
+        const missingRequirements = requiredItems.filter(
+          (requirement: string) =>
+            ![...coveredRequirements].some(
+              (covered) => similarity(String(covered), requirement) >= 0.55,
+            ),
+        );
+
+        if (draftTextLength < 1500 || missingRequirements.length) {
+          const repairedDraftText = await generateWithModel({
+            model: writerModel,
+            keys,
+            system:
+              "당신은 기존 블로그 초안을 부분 수정하는 편집자다. 새 글을 처음부터 다시 쓰지 않는다. 기존 제목, 검증된 사실, 출처 링크, 이미 괜찮은 문단과 문장 순서를 최대한 유지한다. 부족한 길이와 누락된 필수 내용만 보완한다. 제공된 조사 claim 밖의 사실은 추가하지 않는다. 전체 JSON 객체를 반환하되 html은 수정된 완성본이어야 한다.",
+            json: true,
+            jsonSchema: WRITER_RESPONSE_SCHEMA,
+            schemaName: "targeted_blog_repair",
+            maxTokens: 4800,
+            prompt: `다음 기존 초안을 '재작성'하지 말고 필요한 부분만 수정하라.
+
+수정 목표:
+- 현재 본문 순수 텍스트 길이: ${draftTextLength}자
+- 최종 본문 순수 텍스트 길이: 1,500~5,000자
+- 누락된 필수 내용: ${JSON.stringify(missingRequirements)}
+- 기존 문단과 표현은 가능한 한 유지
+- 길이가 부족하면 검증 조사 문서 안의 조건·예외·확인 절차·비교 기준·실행 단계를 기존 관련 문단에 추가
+- 누락된 필수 내용은 가장 자연스러운 기존 소제목 아래에 보완
+- 같은 내용을 반복해서 길이만 늘리지 말 것
+- 새로운 사실을 만들지 말 것
+- usedClaimIds와 coverageMap은 실제 수정 내용에 맞게 갱신
+
+기존 초안:
+${JSON.stringify(parsedDraft).slice(0, 36000)}
+
+검증 조사 문서:
+${research}
+
+검증된 출처:
+${JSON.stringify(sources)}`,
+          });
+          parsedDraft = parseJson<Draft>(repairedDraftText);
+          generationFailures.push(
+            `부분 수정 완료: ${draftTextLength < 1500 ? "본문 길이 보완" : ""}${draftTextLength < 1500 && missingRequirements.length ? ", " : ""}${missingRequirements.length ? `필수 내용 ${missingRequirements.length}개 보완` : ""}`,
+          );
+        }
+
+        draft = validateDraft(
+          parsedDraft,
+          requiredItems,
           researchDossier?.claims?.map((claim) => claim.id) || [],
         );
       }
