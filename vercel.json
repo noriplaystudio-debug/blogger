@@ -40,6 +40,10 @@
     {
       "path": "/api/cron/daily-retry-3",
       "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/daily-retry-4",
+      "schedule": "0 9 * * *"
     }
   ]
 }
