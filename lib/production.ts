@@ -207,7 +207,7 @@ type ResearchDossier = {
     statement: string;
     sourceUrl: string;
     sourceTitle: string;
-    sourceType: "primary" | "authoritative_secondary";
+    sourceType: "primary" | "authoritative_secondary" | "secondary";
     timeSensitivity: "stable" | "changing";
     limitation: string;
   }[];
@@ -250,13 +250,13 @@ function determineEvidencePolicy(body: any): EvidencePolicy {
   return strict
     ? {
         level: "strict",
-        label: "고위험 정보 강화 검증",
+        label: "고위험 정보 단일 출처 검증",
         primaryRequired: false,
-        minimumDomains: 2,
-        minimumClaims: 2,
-        minimumSupportedRequirements: 2,
+        minimumDomains: 1,
+        minimumClaims: 1,
+        minimumSupportedRequirements: 1,
         reason:
-          "건강·법률·금융·선거·안전처럼 잘못된 정보의 피해가 큰 주제만 강화 검증합니다.",
+          "고위험 주제도 확인 가능한 출처 1곳이면 조사를 계속하되, 출처가 뒷받침하지 않는 세부 주장은 빼거나 조건부로 표현합니다.",
       }
     : {
         level: "standard",
@@ -453,9 +453,9 @@ function validateResearchDossier(
     level: "strict",
     label: "고위험·시의성 엄격 검증",
     primaryRequired: false,
-    minimumDomains: 2,
-    minimumClaims: 3,
-    minimumSupportedRequirements: 3,
+    minimumDomains: 1,
+    minimumClaims: 1,
+    minimumSupportedRequirements: 1,
     reason: "기본 안전 기준",
   },
 ) {
@@ -511,9 +511,9 @@ function validateResearchDossier(
 
     if (
       policy.level !== "strict" &&
-      !["primary", "authoritative_secondary"].includes(claim.sourceType)
+      !["primary", "authoritative_secondary", "secondary"].includes(claim.sourceType)
     )
-      claim.sourceType = "authoritative_secondary";
+      claim.sourceType = "secondary";
     if (!["stable", "changing"].includes(claim.timeSensitivity))
       claim.timeSensitivity = "changing";
 
@@ -521,7 +521,7 @@ function validateResearchDossier(
       !String(claim.statement || "").trim() ||
       !urlKey(claim.sourceUrl) ||
       !citationKeys.has(urlKey(claim.sourceUrl)) ||
-      !["primary", "authoritative_secondary"].includes(claim.sourceType) ||
+      !["primary", "authoritative_secondary", "secondary"].includes(claim.sourceType) ||
       !["stable", "changing"].includes(claim.timeSensitivity)
     )
       throw new Error(
@@ -600,7 +600,7 @@ function validateEvidenceAudit(
 
   const strict = policy.level === "strict";
   const minimumScore = strict ? 90 : 80;
-  const minimumSources = strict ? 2 : 1;
+  const minimumSources = 1;
   const unsupportedLimit = strict ? 0 : 1;
   const freshnessBlocks =
     contentMode === "realtime" ? value.freshnessIssues.length > 0 : false;
@@ -636,7 +636,7 @@ async function auditFinalEvidence(
       tools: [{ type: "web_search" }],
       include: ["web_search_call.action.sources" as any],
       reasoning: { effort: "medium" },
-      input: `당신은 최종 발행 직전의 독립 근거 감사자다. 최초 조사자의 결론을 그대로 믿지 말고 실제 원문을 다시 열어 원고의 핵심 사실·수치·날짜·조건·예외를 확인한다. 검색결과 요약만 보고 통과시키지 않는다. 의견·일반적 조언과 검증 가능한 사실을 구분한다. 출처가 있어도 원고가 조건을 빼거나 더 강하게 표현했다면 misleadingClaims에 기록한다. 현재성이 필요한 정보가 낡았거나 날짜를 확인할 수 없으면 freshnessIssues에 기록한다. 사소한 문체 문제는 판단하지 않는다. 일반 블로그 글은 핵심 사실을 뒷받침하는 확인 가능한 원문 1곳 이상이면 충분하며, 가능하면 추가 출처를 확인한다. 건강·법률·금융·선거·안전 등 강화 검증 주제에서만 독립 출처 2곳을 우선 요구한다.${attempt ? `\n이전 감사가 통과하지 못한 이유: ${previousFailure}\n이번에는 빠진 주장과 두 번째 독립 출처를 우선 확인한다.` : ""}\n\n카테고리: ${input.category}\n키워드: ${input.keyword}\n글 브리프: ${JSON.stringify(input.angle)}\n최초 조사 문서: ${JSON.stringify(input.dossier)}\n최종 원고 HTML: ${input.html}\n\nJSON만 출력한다: {"passed":true,"evidenceScore":0,"unsupportedClaims":["출처로 확인되지 않는 원고 주장"],"misleadingClaims":["조건·범위를 왜곡한 주장"],"freshnessIssues":["현재성 문제"],"notes":["감사 메모"],"checkedSources":[{"title":"직접 연 출처명","url":"https://..."}]}`,
+      input: `당신은 최종 발행 직전의 독립 근거 감사자다. 최초 조사자의 결론을 그대로 믿지 말고 실제 원문을 다시 열어 원고의 핵심 사실·수치·날짜·조건·예외를 확인한다. 검색결과 요약만 보고 통과시키지 않는다. 의견·일반적 조언과 검증 가능한 사실을 구분한다. 출처가 있어도 원고가 조건을 빼거나 더 강하게 표현했다면 misleadingClaims에 기록한다. 현재성이 필요한 정보가 낡았거나 날짜를 확인할 수 없으면 freshnessIssues에 기록한다. 사소한 문체 문제는 판단하지 않는다. 모든 주제에서 핵심 사실을 직접 확인할 수 있는 출처 1곳이면 충분하다. 공공기관·공식 홈페이지를 먼저 찾고, 없으면 관련 공개 게시 글·기사에서 확인 가능한 범위로 주장을 좁힌다. 추가 출처는 있으면 참고하되 통과 조건으로 요구하지 않는다.${attempt ? `\n이전 감사가 통과하지 못한 이유: ${previousFailure}\n이번에는 빠진 핵심 주장과 공식 확인 경로를 우선 확인한다.` : ""}\n\n카테고리: ${input.category}\n키워드: ${input.keyword}\n글 브리프: ${JSON.stringify(input.angle)}\n최초 조사 문서: ${JSON.stringify(input.dossier)}\n최종 원고 HTML: ${input.html}\n\nJSON만 출력한다: {"passed":true,"evidenceScore":0,"unsupportedClaims":["출처로 확인되지 않는 원고 주장"],"misleadingClaims":["조건·범위를 왜곡한 주장"],"freshnessIssues":["현재성 문제"],"notes":["감사 메모"],"checkedSources":[{"title":"직접 연 출처명","url":"https://..."}]}`,
     });
     const audit = validateEvidenceAudit(
       parseJson<EvidenceAudit>(response.output_text),
@@ -656,7 +656,7 @@ async function auditFinalEvidence(
     );
     audit.passed = Boolean(
       audit.passed &&
-        checkedDomains.size >= (input.policy.level === "strict" ? 2 : 1),
+        checkedDomains.size >= 1,
     );
     lastAudit = audit;
     if (audit.passed) return audit;
@@ -664,7 +664,7 @@ async function auditFinalEvidence(
       ...audit.unsupportedClaims,
       ...audit.misleadingClaims,
       ...audit.freshnessIssues,
-      ...(checkedDomains.size < (input.policy.level === "strict" ? 2 : 1)
+      ...(checkedDomains.size < 1
         ? ["필요한 출처 수를 확보하지 못함"]
         : []),
     ].join("; ");
@@ -981,6 +981,7 @@ export const productionResilienceTestHooks = {
   validateDraft,
   validateReview,
   validateResearchDossier,
+  validateEvidenceAudit,
   determineEvidencePolicy,
   isSystemicProviderError,
   classifyRecoveryDecision,
@@ -1047,9 +1048,9 @@ async function researchArticleEvidence(apiKey: string, body: any) {
   for (let attempt = 0; attempt < researchAttemptLimit; attempt += 1) {
     const recoveryInstruction =
       [
-        "먼저 글의 필수 질문을 각각 검색하고 공식기관·원문을 중심으로 교차검증한다.",
-        "이전 실패를 보완한다. 기존 출처와 다른 도메인의 독립 출처를 먼저 찾고, 계획 단계의 근거 URL도 실제로 열어 확인한다.",
-        `마지막 보강 단계다. 검증 범위를 좁혀 출처로 확실히 답할 수 있는 주장만 남기고, 모호한 약속은 조건부 답변으로 바꾼다. 그래도 서로 다른 도메인 ${evidencePolicy.minimumDomains}곳${evidencePolicy.primaryRequired ? "과 1차 출처 1곳" : ""}은 확보한다.`,
+        "먼저 공공기관·공식 원문을 검색한다. 관련 내용을 확인할 출처 한 곳을 찾으면 충분하며, 서로 다른 도메인의 교차검증은 요구하지 않는다.",
+        "이전 실패를 보완한다. 공공기관 자료가 없으면 관련 기관·제품·서비스의 공식 홈페이지를 찾고, 거기에도 없으면 주제를 직접 다룬 공개 게시 글이나 기사를 확인한다. 계획 단계의 URL도 실제로 연다.",
+        `마지막 보강 단계다. 검증 범위를 좁혀 출처로 확실히 답할 수 있는 주장만 남기고, 모호한 약속은 조건부 답변으로 바꾼다. 관련 내용을 확인할 수 있는 출처 1곳이면 충분하다.`,
       ][attempt] +
       (body.angle?.contentMode === "realtime"
         ? ` 실시간 관심 글이다. 결과·일정·순위·발표 내용을 지금 다시 확인하고, 기준 시각·기준일과 이후 바뀔 수 있는 항목을 명시한다. 계획 당시 확인 시각은 ${body.angle.sourceCheckedAt || "미기록"}, 사건·경기·발표일은 ${body.angle.eventDate || "미지정"}, 현재성 확인 주기는 ${body.angle.freshnessWindowHours || 24}시간이다. 공식 발표와 신뢰할 수 있는 독립 보도를 우선하며 루머·사생활·피해자 신상·자극적 추측은 제외한다.`
@@ -1060,7 +1061,7 @@ async function researchArticleEvidence(apiKey: string, body: any) {
         tools: [{ type: "web_search" }],
         include: ["web_search_call.action.sources" as any],
         reasoning: { effort: "medium" },
-        input: `한국어 블로그 글을 위한 검증 조사 문서를 만든다.\n카테고리: ${body.category}\n키워드: ${body.keyword}\n검색 의도: ${body.intent}\n글 방향: ${body.angle.titleIdea}\n독자 상황: ${body.angle.readerSituation || "미지정"}\n독자 질문: ${body.angle.searchQuestion || body.keyword}\n답변 약속: ${body.angle.answerPromise || body.angle.purpose}\n반드시 다룰 내용: ${JSON.stringify(body.angle.mustCover || [])}\n제외 범위: ${JSON.stringify(body.angle.exclusions || [])}\n독창 가치 계획: ${body.angle.uniqueValue || "판단 기준과 실행 절차 제공"}\n계획 단계에서 확인한 후보 자료: ${JSON.stringify(planningEvidence)}${recoveryContext}\n\n적용 근거 기준: ${evidencePolicy.label}. ${evidencePolicy.reason} 최소 검증 주장 ${evidencePolicy.minimumClaims}개, 독립 도메인 ${evidencePolicy.minimumDomains}곳${evidencePolicy.primaryRequired ? ", 1차 출처 1곳 필수" : ", 1차 출처 우선(존재하지 않으면 권위 있는 2차 출처 허용)"}.\n\n${recoveryInstruction}${failures.length ? `\n앞선 시도의 실패 사유: ${failures.join(" | ")}` : ""}\n공식기관, 법령·통계 원문, 제조사 공식 문서 등 1차 출처를 우선하고 서로 다른 도메인의 출처로 교차검증한다. 날짜·가격·수치·정책은 오늘 기준 유효성을 확인한다. 검색결과 요약을 출처로 쓰지 말고 실제 원문을 연다. 직접 확인할 수 없는 체험담은 포함하지 않는다. 출처끼리 다르면 숨기지 말고 conflicts에 기록한다. 확인할 수 없는 부분은 unknowns에 기록하고 추측하지 않는다. 각 claim에는 C1, C2처럼 고유 id를 부여한다. 반드시 다룰 내용 각각을 coverage에 그대로 적고, 근거가 되는 claim id를 연결한다. 근거가 없는 필수 내용은 supported=false로 명확히 표시한다. 단순 요약이 아니라 독자가 판단하거나 행동하는 데 필요한 비교 기준·계산·절차·예외를 uniqueValuePlan에 설계한다.\n\nJSON만 출력한다: {"checkedAt":"YYYY-MM-DD","readerNeed":"독자가 해결하려는 문제","directAnswer":"질문에 대한 짧고 조건부인 직접 답","scope":"적용 범위와 전제","claims":[{"id":"C1","statement":"글에 사용할 수 있는 검증된 한 가지 주장","sourceUrl":"실제로 연 원문 URL","sourceTitle":"출처명","sourceType":"primary|authoritative_secondary","timeSensitivity":"stable|changing","limitation":"적용 조건·예외 또는 없음"}],"conflicts":["출처 간 차이"],"unknowns":["확인 불가 사항"],"coverage":[{"requirement":"반드시 다룰 내용 원문","supported":true,"claimIds":["C1"],"gap":"없음 또는 부족한 근거"}],"practicalSteps":["독자가 실행할 단계"],"uniqueValuePlan":["이 글만의 판단표·계산·절차·예외 구성"]}`,
+        input: `한국어 블로그 글을 위한 검증 조사 문서를 만든다.\n카테고리: ${body.category}\n키워드: ${body.keyword}\n검색 의도: ${body.intent}\n글 방향: ${body.angle.titleIdea}\n독자 상황: ${body.angle.readerSituation || "미지정"}\n독자 질문: ${body.angle.searchQuestion || body.keyword}\n답변 약속: ${body.angle.answerPromise || body.angle.purpose}\n반드시 다룰 내용: ${JSON.stringify(body.angle.mustCover || [])}\n제외 범위: ${JSON.stringify(body.angle.exclusions || [])}\n독창 가치 계획: ${body.angle.uniqueValue || "판단 기준과 실행 절차 제공"}\n계획 단계에서 확인한 후보 자료: ${JSON.stringify(planningEvidence)}${recoveryContext}\n\n적용 근거 기준: ${evidencePolicy.label}. ${evidencePolicy.reason} 최소 검증 주장 ${evidencePolicy.minimumClaims}개, 독립 도메인 ${evidencePolicy.minimumDomains}곳${evidencePolicy.primaryRequired ? ", 1차 출처 1곳 필수" : ", 1차 출처 우선(존재하지 않으면 권위 있는 2차 출처 허용)"}.\n\n${recoveryInstruction}${failures.length ? `\n앞선 시도의 실패 사유: ${failures.join(" | ")}` : ""}\n출처는 다음 순서로 검색한다: 1) 공공기관·법령·공식 통계 등 공신력 있는 원문, 2) 해당 제품·서비스·행사·기관의 공식 홈페이지, 3) 관련 주제를 직접 다룬 공개 게시 글이나 기사. 앞 단계에 자료가 없으면 다음 단계로 넘어가고, 관련 주장을 직접 확인할 수 있는 출처 하나를 찾으면 계속 진행한다. 검색결과 요약만으로 사실을 만들지 말고 실제 페이지를 연다. 날짜·가격·수치·정책은 출처가 확인해 주는 범위까지만 적고, 한 출처로 확인되지 않으면 주장을 좁히거나 조건부로 표현한다. 직접 확인할 수 없는 체험담은 포함하지 않는다. 출처끼리 다르면 숨기지 말고 conflicts에 기록한다. 확인할 수 없는 부분은 unknowns에 기록하고 추측하지 않는다. 각 claim에는 C1, C2처럼 고유 id를 부여한다. 반드시 다룰 내용 각각을 coverage에 그대로 적고, 근거가 되는 claim id를 연결한다. 근거가 없는 필수 내용은 supported=false로 표시하되 조사 전체를 실패 처리하지 않는다. 고위험 주제는 공식 자료가 없으면 위험한 조언·단정을 빼고 일반 정보와 공식 확인 경로만 다룬다. 단순 요약이 아니라 독자가 판단하거나 행동하는 데 필요한 비교 기준·계산·절차·예외를 uniqueValuePlan에 설계한다.\n\nJSON만 출력한다: {"checkedAt":"YYYY-MM-DD","readerNeed":"독자가 해결하려는 문제","directAnswer":"질문에 대한 짧고 조건부인 직접 답","scope":"적용 범위와 전제","claims":[{"id":"C1","statement":"글에 사용할 수 있는 검증된 한 가지 주장","sourceUrl":"실제로 연 원문 URL","sourceTitle":"출처명","sourceType":"primary|authoritative_secondary|secondary","timeSensitivity":"stable|changing","limitation":"적용 조건·예외 또는 없음"}],"conflicts":["출처 간 차이"],"unknowns":["확인 불가 사항"],"coverage":[{"requirement":"반드시 다룰 내용 원문","supported":true,"claimIds":["C1"],"gap":"없음 또는 부족한 근거"}],"practicalSteps":["독자가 실행할 단계"],"uniqueValuePlan":["이 글만의 판단표·계산·절차·예외 구성"]}`,
       });
       const citations = extractCitations(response);
       const dossier = validateResearchDossier(

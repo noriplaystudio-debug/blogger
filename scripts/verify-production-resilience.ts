@@ -223,6 +223,9 @@ const strictPolicy =
     angle: { contentMode: "evergreen" },
   });
 assert.equal(strictPolicy.level, "strict");
+assert.equal(strictPolicy.minimumClaims, 1);
+assert.equal(strictPolicy.minimumDomains, 1);
+assert.equal(strictPolicy.minimumSupportedRequirements, 1);
 assert.doesNotThrow(() =>
   productionResilienceTestHooks.validateResearchDossier(
     structuredClone(standardDossier),
@@ -232,31 +235,43 @@ assert.doesNotThrow(() =>
   ),
 );
 const oneDomainStrict = structuredClone(standardDossier);
-oneDomainStrict.claims = oneDomainStrict.claims.map((claim: any) => ({
-  ...claim,
-  sourceUrl: researchSources[0].url,
-  sourceTitle: researchSources[0].title,
-}));
-assert.throws(() =>
-  productionResilienceTestHooks.validateResearchDossier(
-    oneDomainStrict,
-    researchSources,
-    ["신청 조건"],
-    strictPolicy,
-  ),
-);
-const onePrimaryDomainStrict = structuredClone(oneDomainStrict);
-onePrimaryDomainStrict.claims = onePrimaryDomainStrict.claims.map(
-  (claim: any) => ({ ...claim, sourceType: "primary" as const }),
-);
+oneDomainStrict.claims = [
+  {
+    ...oneDomainStrict.claims[0],
+    sourceUrl: researchSources[0].url,
+    sourceTitle: researchSources[0].title,
+    sourceType: "secondary",
+  },
+];
+oneDomainStrict.coverage = [
+  {
+    requirement: "신청 조건",
+    supported: true,
+    claimIds: ["C1"],
+    gap: "없음",
+  },
+];
 assert.doesNotThrow(() =>
   productionResilienceTestHooks.validateResearchDossier(
-    onePrimaryDomainStrict,
-    researchSources,
+    oneDomainStrict,
+    [researchSources[0]],
     ["신청 조건"],
     strictPolicy,
   ),
 );
+const oneSourceAudit = productionResilienceTestHooks.validateEvidenceAudit(
+  {
+    passed: true,
+    evidenceScore: 95,
+    unsupportedClaims: [],
+    misleadingClaims: [],
+    freshnessIssues: [],
+    notes: [],
+    checkedSources: [researchSources[0]],
+  },
+  strictPolicy,
+);
+assert.equal(oneSourceAudit.passed, true);
 const productionSource = readFileSync(
   new URL("../lib/production.ts", import.meta.url),
   "utf8",

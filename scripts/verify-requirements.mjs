@@ -54,8 +54,15 @@ check(
 check(
   "일반 글 완화·고위험 강화 검증",
   files.production.includes('"개인 블로그 실용 검증"') &&
-    files.production.includes('"고위험 정보 강화 검증"') &&
+    files.production.includes('"고위험 정보 단일 출처 검증"') &&
     files.production.includes("standardCraftPass"),
+);
+check(
+  "출처 단계별 검색과 단일 출처 허용",
+  files.planning.includes("공공기관·공식 원문 → 관련 제품·서비스·기관 홈페이지 → 관련 공개 게시 글·기사") &&
+    files.planning.includes("열어 확인한 관련 URL 1개면 충분") &&
+    files.production.includes("관련 내용을 확인할 수 있는 출처 1곳이면 충분") &&
+    files.production.includes('const minimumSources = 1;'),
 );
 check(
   "AI 호출 시간 제한",

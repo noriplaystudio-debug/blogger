@@ -493,7 +493,7 @@ function validPreflightClaims(value: any[], _sources: any[]) {
   // Planning should verify structure and source diversity, but must not depend on
   // the provider returning every opened page again in the citation envelope.
   // Article production performs a fresh evidence check before publication.
-  if (!Array.isArray(value) || value.length < 2) return false;
+  if (!Array.isArray(value) || value.length < 1) return false;
   const claimDomains = new Set<string>();
   let hasPrimary = false;
   for (const claim of value) {
@@ -502,14 +502,14 @@ function validPreflightClaims(value: any[], _sources: any[]) {
       !String(claim?.id || "").trim() ||
       !String(claim?.statement || "").trim() ||
       !domain ||
-      !["primary", "authoritative_secondary"].includes(claim?.sourceType) ||
+      !["primary", "authoritative_secondary", "secondary"].includes(claim?.sourceType) ||
       !["stable", "changing"].includes(claim?.timeSensitivity)
     )
       return false;
     claimDomains.add(domain);
     if (claim.sourceType === "primary") hasPrimary = true;
   }
-  return claimDomains.size >= 2 || hasPrimary;
+  return claimDomains.size >= 1 || hasPrimary;
 }
 
 export async function createCategoryStage(
@@ -636,8 +636,8 @@ export async function createKeywordStage(
   const settings = normalizePlanningSettings(input.settings);
   const category = input.category;
   const candidatePoolSize = Math.min(
-    30,
-    Math.max(settings.keywordsPerCategory * 3, settings.keywordsPerCategory + 4),
+    20,
+    Math.max(settings.keywordsPerCategory + 1, Math.ceil(settings.keywordsPerCategory * 1.5)),
   );
   const response = await new OpenAI({ apiKey, timeout: 90000, maxRetries: 1 }).responses.create({
     model: process.env.RESEARCH_MODEL || "gpt-5.6-terra",
@@ -648,7 +648,7 @@ export async function createKeywordStage(
     input: `다음 Google Blogger 카테고리에서 이번 주에 작성할 키워드만 조사한다. 글 방향은 아직 만들지 않는다.
 
 카테고리: ${JSON.stringify(category)}
-최종 필요 키워드 수는 ${settings.keywordsPerCategory}개다. 이번 응답에는 후보를 최대 ${candidatePoolSize}개까지 출력한다. 서버가 근거 사전검증을 통과한 후보만 골라 최종 수량을 채운다. 각 키워드는 실제 독자 질문이어야 하며 서로 검색 의도가 겹치지 않아야 한다. 특히 상대팀·지역·날짜·제품명처럼 '대상만 바뀌고 독자가 원하는 답이 같은 키워드'는 별도 글 후보로 쪼개지 않는다. 이런 후보들은 같은 articleGroupKey를 부여하고, 여러 대상을 한 글에서 자연스럽게 다룰 수 있는 umbrellaKeyword를 함께 제안한다. 예: '한국 A전 중계 어디서', '한국 B전 중계 어디서'는 같은 articleGroupKey로 묶고 '한국 축구 국가대표 친선경기 일정·중계 보는 법' 같은 하나의 umbrellaKeyword로 합친다.
+최종 필요 키워드 수는 ${settings.keywordsPerCategory}개다. 이번 응답에는 후보를 최대 ${candidatePoolSize}개까지 출력한다. 공개 자료 한 곳에서 핵심 질문을 확인할 수 있으면 후보로 유지한다. 각 키워드는 실제 독자 질문이어야 하며 서로 검색 의도가 겹치지 않아야 한다. 특히 상대팀·지역·날짜·제품명처럼 '대상만 바뀌고 독자가 원하는 답이 같은 키워드'는 별도 글 후보로 쪼개지 않는다. 이런 후보들은 같은 articleGroupKey를 부여하고, 여러 대상을 한 글에서 자연스럽게 다룰 수 있는 umbrellaKeyword를 함께 제안한다. 예: '한국 A전 중계 어디서', '한국 B전 중계 어디서'는 같은 articleGroupKey로 묶고 '한국 축구 국가대표 친선경기 일정·중계 보는 법' 같은 하나의 umbrellaKeyword로 합친다.
 
 카테고리가 realtime이면 짧은 유효기간 때문에 제외하지 말고 수요·상승세·공식 출처·광고 안전성으로 평가한다. freshnessWindowHours는 6·24·72·168 중 하나로 정하고 eventDate와 현재 sourceCheckedAt을 기록한다. 행사·경기·시상식이 아직 끝나지 않았다면 수상작·우승·최종 결과·최종 순위처럼 미래 사실을 전제한 키워드를 선정하지 말고 일정·후보·현재 순위·관전 포인트처럼 현재 확인 가능한 질문으로 자동 전환한다. evergreen이면 반복 검색 가능성과 실행 가치를 우선한다.
 
@@ -1054,13 +1054,13 @@ export async function createWeeklyPlan(
 3. 최근 상승은 가능하면 서로 독립적인 신호 2개 이상 또는 권위 있는 추세 자료 1개로 확인한다. 근거가 약하거나 서로 충돌하면 trend와 confidence를 각각 '판단보류', '낮음'으로 쓴다.
 4. 콘텐츠를 evergreen(장기 검색형)과 realtime(실시간 관심형)으로 분리한다. evergreen은 3개월 이상 반복 검색될 문제를 우선한다. realtime은 1시간~7일 안에 관심이 집중되는 사건·방송·공연·영화·음악·스포츠 일정·경기 결과·기록·공식 발표도 적극 포함하며, 짧게 유효하다는 이유만으로 제외하지 않는다.
 5. 건강·의료, 법률, 대출·투자 추천, 선거·정치 선동 등 고위험 YMYL, 연예인 사생활·확인되지 않은 열애설·루머, 피해자 신상·잔혹 묘사·사건 자극화, 성인·도박·불법, 혐오·충격 소재, 저작권 침해 유도는 제외한다. 연예는 공식 발표·작품·방송·공연·차트·수상 정보, 스포츠는 공식 일정·결과·기록·규정·선수 또는 구단의 공개 발표, 사건은 독자의 생활에 영향을 주는 공공기관 발표·교통·안전·서비스 변경·후속 절차처럼 검증 가능한 정보만 다룬다.
-6. 새 블로그가 답할 수 있을 만큼 구체적이고, 1차 자료가 있으며, 독자가 실제 행동으로 옮길 수 있는 정보형·문제해결형 키워드를 우선한다. 단순 인기 대형 키워드만 선택하지 않는다.
+6. 새 블로그가 답할 수 있을 만큼 구체적이고 독자가 실제 행동으로 옮길 수 있는 정보형·문제해결형 키워드를 우선한다. 1차 자료가 있으면 우선하지만 필수는 아니다. 관련 공개 자료 하나라도 찾아 핵심 질문에 답할 수 있는 주제는 후보로 유지한다.
 7. 카테고리는 서로 충분히 달라야 하고 각각 별도 전문 블로그로 최소 6개월 운영 가능한 범위여야 한다. 각 블로그는 한 문장으로 설명되는 특정 독자와 문제 영역을 유지한다. 특정 브랜드에 과도하게 종속되거나 광고만을 위한 얕은 주제를 피한다.
 8. 설정 수량은 반드시 채워야 하는 할당량이 아니라 최대치다. 품질 기준을 통과한 항목만 최대 ${settings.categoryCount}개 카테고리, 각 최대 ${settings.keywordsPerCategory}개 키워드로 제안한다. 한 키워드의 글 ${settings.articlesPerKeyword}개는 검색 의도·독자 상황·구성이 실제로 달라야 하며 제목만 바꾼 중복 글이면 안 된다.
-8-1. 자동화만으로 독창적 가치를 만들기 어려운 단순 정의·요약·목록형 주제, 실제 사용·방문·전문 자격이 있어야 신뢰할 수 있는 리뷰형 주제는 제외한다. 대신 여러 1차 자료를 비교해 독자가 판단할 수 있는 기준표·계산·절차·예외·체크리스트를 만들 수 있는 주제를 우선한다.
-8-2. 요청 수량의 최소 2배 후보를 내부적으로 먼저 조사한 뒤 결과 JSON에는 최종 선정 항목만 넣는다. 한 후보의 출처가 부족하면 즉시 버리기 전에 검색 질문을 더 구체적으로 좁히거나 실행형·비교형 각도로 바꾸고, 그래도 근거를 확보하지 못한 경우에만 다음 후보로 대체한다.
-8-3. 최종 선정하는 각 키워드는 서로 다른 도메인의 실제 원문 URL을 최소 2개 확보해야 한다. 가능하면 그중 하나는 공식기관·법령·통계·제조사 문서 같은 1차 자료여야 한다. 이 URL은 글 작성 단계의 보강 검색에 그대로 전달되므로 검색결과 페이지나 존재를 추정한 주소를 넣지 않는다.
-8-4. 전체 카테고리 중 약 40%, 최소 ${realtimeTarget}개는 realtime으로 우선 제안한다. 카테고리 수가 1개여도 검증 가능한 실시간 관심 카테고리 1개를 먼저 검토한다. realtime 후보가 안전성·출처 기준을 통과하지 못할 때만 실제 선정 수가 줄어들 수 있으며, 빈자리를 근거 약한 루머로 채우지 않는다.
+8-1. 실제 사용·방문·전문 자격을 꾸며내야만 성립하는 리뷰는 제외한다. 그 외에는 공개 자료 하나를 바탕으로 조건·확인 방법·절차·체크리스트를 덧붙여 유용한 글을 만들 수 있으면 후보로 허용한다. 여러 자료 비교나 독립된 두 번째 출처를 필수로 요구하지 않는다.
+8-2. 요청 수량보다 최대 1개 많은 후보만 추가 확인하되, 출처 검색은 다음 순서로 한다: 공공기관·공식 원문 → 관련 제품·서비스·기관 홈페이지 → 관련 공개 게시 글·기사. 앞 단계에서 찾지 못하면 다음 단계로 넘어간다. 관련된 공개 자료 1개에서 핵심 주장 1개를 확인하면 후보를 유지한다. 자료가 전혀 없을 때만 질문을 좁히거나 다음 후보로 대체한다.
+8-3. 최종 키워드마다 실제로 열어 확인한 관련 URL 1개면 충분하다. 공공기관·공식 홈페이지를 우선하고, 찾지 못하면 관련 공개 게시 글·기사도 허용한다. 검색결과 페이지나 존재를 추정한 주소는 넣지 않는다. 출처가 뒷받침하는 범위로만 글의 주장을 제한한다.
+8-4. 전체 카테고리 중 약 40%, 최소 ${realtimeTarget}개는 realtime으로 우선 제안한다. 카테고리 수가 1개여도 검증 가능한 실시간 관심 카테고리 1개를 먼저 검토한다. realtime 후보는 공개 자료 1개에서 현재 관심을 확인할 수 있으면 선정할 수 있다. 정책 위험·루머·피해자 신상 등 명백한 안전 문제가 있는 경우만 제외하며, 수량을 채우려고 사실을 만들어내지 않는다.
 8-5. realtime 글은 freshnessWindowHours를 6·24·72·168 중 하나로 지정하고, eventDate와 sourceCheckedAt을 명시한다. 실시간 카테고리와 글 작업은 대기열 앞쪽에 배치한다. 결과·일정·순위처럼 바뀔 수 있는 사실은 제목과 본문에서 확인 시각 또는 기준일을 명확히 적도록 브리프에 포함한다.
 8-6. 행사·경기·시상식의 종료 여부를 공식 일정으로 먼저 확인한다. 아직 종료되지 않았다면 수상작·우승·최종 결과·최종 순위처럼 확정되지 않은 미래 사실을 전제한 키워드와 제목을 만들지 말고, 일정·후보·현재 순위·관전 포인트·확인 방법으로 자동 전환한다. 진행 중인 대회는 반드시 '현재 순위(기준 시각)'로 표현한다.
 ${portfolioRule}
@@ -1071,7 +1071,7 @@ ${strategyRule}
 [선정 방식]
 각 카테고리를 demand(공개 관심), momentum(최근 변화), durability(지속성), accessibility(신규 블로그 공략 가능성), adSafety(광고·정책 안전성), sourceability(신뢰 출처 확보)를 0~100으로 보수적으로 평가한다. evergreen은 지속성, realtime은 수요·상승세·출처 확보에 더 높은 가중치를 둔다. 키워드는 demand, momentum, durability, competitionOpportunity(대형 사이트가 놓친 구체적 질문), sourceability, uniqueValue(단순 재요약을 넘어설 여지), topicalFit(해당 블로그 핵심 주제 적합도)을 평가한다. priorityScore는 참고값이며 서버가 트랙별 가중치로 다시 계산한다. 근거 링크는 실제 조사에 사용한 URL만 포함한다.
 
-내부 조사에서는 카테고리와 키워드 후보를 요청량의 최소 2배 검토하되, 결과에는 최대 ${settings.categoryCount}개 카테고리, 카테고리별 최대 ${settings.keywordsPerCategory}개 키워드, 키워드별 서로 다른 글 방향 ${settings.articlesPerKeyword}개만 넣는다. 최대 ${totalArticles}개 작업을 우선순위대로 배열하고, 근거 부족 후보는 질문 범위를 보정하거나 다음 후보로 대체한 뒤에도 기준 미달인 경우에만 개수를 줄인다. 하루 ${settings.dailyArticleLimit}개씩 처리하며 7일을 넘는 작업은 다음 날짜로 자연스럽게 이어진다.
+내부 조사에서는 카테고리와 키워드 후보를 요청량보다 최대 1개 더 검토하되, 결과에는 최대 ${settings.categoryCount}개 카테고리, 카테고리별 최대 ${settings.keywordsPerCategory}개 키워드, 키워드별 서로 다른 글 방향 ${settings.articlesPerKeyword}개만 넣는다. 최대 ${totalArticles}개 작업을 우선순위대로 배열하고, 공개 자료 1개를 찾은 후보는 다른 출처가 더 없다는 이유로 제외하지 않는다. 관련 자료를 하나도 찾지 못한 후보만 질문 범위를 보정하거나 다음 후보로 대체한다. 하루 ${settings.dailyArticleLimit}개씩 처리하며 7일을 넘는 작업은 다음 날짜로 자연스럽게 이어진다.
 
 카테고리마다 별도 Blogger를 만들지 않는다. 독자 목적이 비슷한 카테고리를 3~4개씩 같은 blogGroupId로 묶고, 전체 수량상 불가피할 때만 2개 묶음을 허용한다. 같은 묶음에는 '오늘의 똑똑이', '알쓸 똑똑이'처럼 특정 주제에 종속되지 않는 동일한 한국어 브랜드 이름·한 줄 소개·영문 소문자·숫자·하이픈만 사용한 blogspot 주소 후보 3개를 제안한다. 서로 완전히 무관한 주제는 억지로 묶지 않으며 주소 사용 가능 여부는 확인했다고 주장하지 않는다.
 
