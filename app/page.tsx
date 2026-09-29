@@ -1145,6 +1145,8 @@ export default function Home() {
         const runKey = String(started.runKey || "");
         const startedAt = Date.now();
         let consecutivePollFailures = 0;
+        let lastProgressUpdatedAt = "";
+        let lastResumeAttemptAt = 0;
         while (Date.now() - startedAt < 20 * 60 * 1000) {
           await new Promise((resolve) => setTimeout(resolve, 2500));
           let progressResponse: Response;
@@ -1169,10 +1171,27 @@ export default function Home() {
             );
           }
 
+          const progressUpdatedAt = String(progress.updatedAt || "");
+          const progressStalled =
+            progress.status === "running" &&
+            progressUpdatedAt &&
+            progressUpdatedAt === lastProgressUpdatedAt &&
+            Date.now() - lastResumeAttemptAt > 30000;
+
+          if (progressStalled) {
+            lastResumeAttemptAt = Date.now();
+            fetch("/api/automation/weekly-resume", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ runKey }),
+            }).catch(() => {});
+          }
+          lastProgressUpdatedAt = progressUpdatedAt;
+
           setBusy(
             progress.status === "ready"
               ? "주간 계획 저장 완료"
-              : `주간 계획 생성 중 · 카테고리 ${progress.categoryCount}개 · 키워드 ${progress.keywordCount}개 · 주간 글 ${progress.articleCapacity || 0}/${progress.weeklyArticleTarget || workflow.dailyArticleLimit * 7}${progress.skippedCategories ? ` · 교체 후보 ${progress.skippedCategories}개` : ""}${progress.failures ? ` · 자동 재시도 ${progress.failures}회` : ""}`,
+              : `주간 계획 생성 중 · 카테고리 ${progress.categoryCount}개 · 키워드 ${progress.keywordCount}개 · 주간 글 ${progress.articleCapacity || 0}/${progress.weeklyArticleTarget || workflow.dailyArticleLimit * 7}${progressStalled ? " · 멈춤 감지 → 자동 재개 요청" : ""}${progress.skippedCategories ? ` · 교체 후보 ${progress.skippedCategories}개` : ""}${progress.failures ? ` · 자동 재시도 ${progress.failures}회` : ""}`,
           );
 
           if (progress.status === "failed")
