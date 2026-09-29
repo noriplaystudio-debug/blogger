@@ -249,8 +249,8 @@ export async function GET(req: NextRequest) {
       }
 
       if (
-        completedCategoryCount >= Number(settings.categoryCount) &&
-        articleCapacity < weeklyArticleTarget &&
+        (completedCategoryCount < Number(settings.categoryCount) ||
+          articleCapacity < weeklyArticleTarget) &&
         !hasUnprocessedCandidate() &&
         activeCandidates().length < 20 &&
         stageCalls < MAX_STAGE_CALLS_PER_INVOCATION
@@ -270,6 +270,7 @@ export async function GET(req: NextRequest) {
             String(category?.name || "").trim().toLowerCase(),
           ),
         );
+        let addedCategories = 0;
         for (const category of categoryResult.draft?.categories || []) {
           if (activeCandidates().length >= 20) break;
           const key = String(category?.name || "").trim().toLowerCase();
@@ -279,7 +280,11 @@ export async function GET(req: NextRequest) {
             ...category,
             supplementalCategory: true,
           });
+          addedCategories += 1;
         }
+        draft.supplementFailures = addedCategories
+          ? 0
+          : Number(draft.supplementFailures || 0) + 1;
         sources = mergeSources(sources, categoryResult.sources || []);
         stageCalls += 1;
         await saveWeeklyPlanningProgress({
@@ -365,6 +370,21 @@ export async function GET(req: NextRequest) {
       break;
     }
 
+    const finalCapacity = plannedArticleCapacity(draft, settings);
+    const finalCompletedCategories = (draft?.categories || []).filter(
+      (category: any) =>
+        !category?.planningSkipped &&
+        Array.isArray(category.keywords) &&
+        category.keywords.length > 0,
+    ).length;
+    const capacityNeedsMore =
+      (finalCompletedCategories < Number(settings.categoryCount) ||
+        finalCapacity < Number(settings.dailyArticleLimit) * 7) &&
+      (draft?.categories || []).filter(
+        (category: any) => !category?.planningSkipped,
+      ).length < 20 &&
+      Number(draft?.supplementFailures || 0) < 3;
+
     const incompleteCategories = (draft?.categories || []).filter(
       (category: any) =>
         !category?.planningSkipped &&
@@ -382,12 +402,16 @@ export async function GET(req: NextRequest) {
         ),
     ).length;
 
-    if (incompleteCategories > 0) {
+    if (incompleteCategories > 0 || capacityNeedsMore) {
       const detail = {
         weekStart,
         resumed: Boolean(progress),
         stageCalls,
         incompleteCategories,
+        articleCapacity: finalCapacity,
+        weeklyArticleTarget: Number(settings.dailyArticleLimit) * 7,
+        capacityNeedsMore,
+        supplementFailures: Number(draft?.supplementFailures || 0),
         status: "saved-for-resume",
       };
       if (runId) await finishRun(runId, "partial", detail);
