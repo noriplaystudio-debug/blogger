@@ -1127,8 +1127,19 @@ export default function Home() {
         if (!startedResponse.ok)
           throw new Error(started.error || "주간 계획을 시작하지 못했습니다.");
 
+        if (started.alreadyComplete) {
+          await refreshAutomationStatus(true);
+          clearPlanningRun();
+          setMessage(
+            `이번 주 계획은 이미 충분합니다. 카테고리 ${started.existingCategoryCount || 0}개 · 주간 글 ${started.existingArticleCapacity || 0}/${started.weeklyArticleTarget || workflow.dailyArticleLimit * 7}개입니다.`,
+          );
+          return;
+        }
+
         setMessage(
-          "주간 계획을 서버에서 계속 생성 중입니다. 이 화면을 닫거나 이동해도 작업은 계속됩니다.",
+          started.resumedExistingPlan
+            ? `기존 주간 계획을 유지하고 부족한 글만 자동 보충 중입니다. 현재 ${started.existingArticleCapacity || 0}/${started.weeklyArticleTarget || workflow.dailyArticleLimit * 7}개입니다.`
+            : "주간 계획을 서버에서 계속 생성 중입니다. 이 화면을 닫거나 이동해도 작업은 계속됩니다.",
         );
 
         const runKey = String(started.runKey || "");
@@ -1161,7 +1172,7 @@ export default function Home() {
           setBusy(
             progress.status === "ready"
               ? "주간 계획 저장 완료"
-              : `주간 계획 생성 중 · 카테고리 ${progress.categoryCount}/${progress.targetCategoryCount || workflow.categoryCount} · 키워드 ${progress.keywordCount}/${progress.targetKeywordCount || workflow.categoryCount * workflow.keywordsPerCategory} · 글 방향 ${progress.completedAngles}/${progress.expectedAngles}${progress.skippedCategories ? ` · 교체 후보 ${progress.skippedCategories}개` : ""}${progress.failures ? ` · 자동 재시도 ${progress.failures}회` : ""}`,
+              : `주간 계획 생성 중 · 카테고리 ${progress.categoryCount}개 · 키워드 ${progress.keywordCount}개 · 주간 글 ${progress.articleCapacity || 0}/${progress.weeklyArticleTarget || workflow.dailyArticleLimit * 7}${progress.skippedCategories ? ` · 교체 후보 ${progress.skippedCategories}개` : ""}${progress.failures ? ` · 자동 재시도 ${progress.failures}회` : ""}`,
           );
 
           if (progress.status === "failed")
@@ -1174,7 +1185,7 @@ export default function Home() {
             await refreshAutomationStatus(true);
             clearPlanningRun();
             setMessage(
-              `주간 계획 생성이 완료됐습니다. 카테고리 ${progress.categoryCount}개 · 키워드 ${progress.keywordCount}개를 저장했습니다.`,
+              `주간 계획 생성이 완료됐습니다. 카테고리 ${progress.categoryCount}개 · 키워드 ${progress.keywordCount}개 · 주간 글 ${progress.articleCapacity || 0}개를 저장했습니다.`,
             );
             return;
           }
