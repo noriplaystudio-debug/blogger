@@ -81,9 +81,9 @@ export async function ensureSchema() {
             keywords_per_category=5,
             articles_per_keyword=2,
             daily_article_limit=7,
-            config_revision=2,
+            config_revision=3,
             updated_at=now()
-        WHERE id=1 AND config_revision < 2`;
+        WHERE id=1 AND config_revision < 3`;
       await sql`CREATE TABLE IF NOT EXISTS oauth_credentials (
       id integer PRIMARY KEY DEFAULT 1 CHECK (id = 1),
       access_token text,
