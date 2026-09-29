@@ -360,12 +360,15 @@ export function validatePlan(
           `${category.name}: 키워드가 우선순위 내림차순이 아닙니다.`,
         );
       previousKeywordScore = keyword.priorityScore;
+      const expectedArticleCount = Number(
+        keyword.articleCountOverride || settings.articlesPerKeyword,
+      );
       if (
         !Array.isArray(keyword.angles) ||
-        keyword.angles.length !== settings.articlesPerKeyword
+        keyword.angles.length !== expectedArticleCount
       )
         throw new Error(
-          `${keyword.keyword}: 글 방향이 정확히 ${settings.articlesPerKeyword}개가 아닙니다.`,
+          `${keyword.keyword}: 글 방향이 정확히 ${expectedArticleCount}개가 아닙니다.`,
         );
       if (!Array.isArray(keyword.evidence)) keyword.evidence = [];
       const angleNames = keyword.angles.map((angle: any) =>
@@ -631,7 +634,7 @@ export async function createKeywordStage(
     input: `다음 Google Blogger 카테고리에서 이번 주에 작성할 키워드만 조사한다. 글 방향은 아직 만들지 않는다.
 
 카테고리: ${JSON.stringify(category)}
-최종 필요 키워드 수는 ${settings.keywordsPerCategory}개다. 이번 응답에는 후보를 최대 ${candidatePoolSize}개까지 출력한다. 서버가 근거 사전검증을 통과한 후보만 골라 최종 수량을 채운다. 각 키워드는 실제 독자 질문이어야 하며 서로 검색 의도가 겹치지 않아야 한다.
+최종 필요 키워드 수는 ${settings.keywordsPerCategory}개다. 이번 응답에는 후보를 최대 ${candidatePoolSize}개까지 출력한다. 서버가 근거 사전검증을 통과한 후보만 골라 최종 수량을 채운다. 각 키워드는 실제 독자 질문이어야 하며 서로 검색 의도가 겹치지 않아야 한다. 특히 상대팀·지역·날짜·제품명처럼 '대상만 바뀌고 독자가 원하는 답이 같은 키워드'는 별도 글 후보로 쪼개지 않는다. 이런 후보들은 같은 articleGroupKey를 부여하고, 여러 대상을 한 글에서 자연스럽게 다룰 수 있는 umbrellaKeyword를 함께 제안한다. 예: '한국 A전 중계 어디서', '한국 B전 중계 어디서'는 같은 articleGroupKey로 묶고 '한국 축구 국가대표 친선경기 일정·중계 보는 법' 같은 하나의 umbrellaKeyword로 합친다.
 
 카테고리가 realtime이면 짧은 유효기간 때문에 제외하지 말고 수요·상승세·공식 출처·광고 안전성으로 평가한다. freshnessWindowHours는 6·24·72·168 중 하나로 정하고 eventDate와 현재 sourceCheckedAt을 기록한다. 행사·경기·시상식이 아직 끝나지 않았다면 수상작·우승·최종 결과·최종 순위처럼 미래 사실을 전제한 키워드를 선정하지 말고 일정·후보·현재 순위·관전 포인트처럼 현재 확인 가능한 질문으로 자동 전환한다. evergreen이면 반복 검색 가능성과 실행 가치를 우선한다.
 
@@ -640,7 +643,7 @@ export async function createKeywordStage(
 최근 사용 키워드(최근 80개): ${JSON.stringify((input.recentKeywords || []).slice(0, 80))}
 최근 콘텐츠(최근 100개 요약): ${JSON.stringify((input.recentContent || []).slice(0, 100)).slice(0, 7000)}
 
-JSON만 출력한다: {"keywords":[{"keyword":"구체적 검색어","contentMode":"${category.contentMode}","freshnessWindowHours":24,"eventDate":"YYYY-MM-DD 또는 해당 없음","sourceCheckedAt":"ISO-8601 시각","intent":"정보형|비교형|문제해결형|구매형","clusterRole":"기둥글|하위질문|비교|실행|문제해결","trend":"상승|보합|판단보류","confidence":"높음|중간","scores":{"demand":0,"momentum":0,"durability":0,"competitionOpportunity":0,"sourceability":0,"uniqueValue":0,"topicalFit":0},"reason":"왜 이번 주에 다룰 가치가 있는지","evidence":[{"signal":"공개 관심 신호","period":"1시간|24시간|7일|30일|12개월","url":"https://..."}]}]}`,
+JSON만 출력한다: {"keywords":[{"keyword":"구체적 검색어","articleGroupKey":"대상명이 달라도 같은 답이면 동일한 안정적 그룹키","umbrellaKeyword":"같은 그룹을 하나의 글로 합쳤을 때 사용할 대표 검색 주제","mergeScope":["이 글에 함께 포함할 대상·경기·제품·지역"],"contentMode":"${category.contentMode}","freshnessWindowHours":24,"eventDate":"YYYY-MM-DD 또는 해당 없음","sourceCheckedAt":"ISO-8601 시각","intent":"정보형|비교형|문제해결형|구매형","clusterRole":"기둥글|하위질문|비교|실행|문제해결","trend":"상승|보합|판단보류","confidence":"높음|중간","scores":{"demand":0,"momentum":0,"durability":0,"competitionOpportunity":0,"sourceability":0,"uniqueValue":0,"topicalFit":0},"reason":"왜 이번 주에 다룰 가치가 있는지","evidence":[{"signal":"공개 관심 신호","period":"1시간|24시간|7일|30일|12개월","url":"https://..."}]}]}`,
   });
   const value = parseJson<any>(response.output_text);
   if (!Array.isArray(value?.keywords) || !value.keywords.length)
@@ -689,7 +692,71 @@ JSON만 출력한다: {"keywords":[{"keyword":"구체적 검색어","contentMode
         Number(a.scores?.sourceability || 0) ||
       Number(b.scores?.demand || 0) - Number(a.scores?.demand || 0),
   );
-  const selected = eligible.slice(0, settings.keywordsPerCategory);
+
+  // Merge candidates that answer the same reader question. Variants that only
+  // change opponent/place/date/product become one umbrella article instead of
+  // competing posts.
+  const grouped = new Map<string, any[]>();
+  for (const keyword of eligible) {
+    const groupKey = String(
+      keyword.articleGroupKey ||
+        [keyword.intent || "정보형", keyword.clusterRole || "하위질문", keyword.umbrellaKeyword || keyword.keyword].join(":"),
+    )
+      .trim()
+      .toLowerCase();
+    grouped.set(groupKey, [...(grouped.get(groupKey) || []), keyword]);
+  }
+
+  const consolidated = [...grouped.values()].map((group) => {
+    const primary = { ...group[0] };
+    if (group.length === 1) {
+      primary.articleCountOverride = settings.articlesPerKeyword;
+      primary.mergeScope = Array.isArray(primary.mergeScope)
+        ? primary.mergeScope
+        : [primary.keyword];
+      return primary;
+    }
+
+    const umbrella =
+      group.map((item) => String(item.umbrellaKeyword || "").trim()).find(Boolean) ||
+      String(primary.keyword);
+    const mergeScope = [
+      ...new Set(
+        group.flatMap((item) =>
+          Array.isArray(item.mergeScope) && item.mergeScope.length
+            ? item.mergeScope.map(String)
+            : [String(item.keyword)],
+        ),
+      ),
+    ];
+    const evidence = [
+      ...new Map(
+        group
+          .flatMap((item) => (Array.isArray(item.evidence) ? item.evidence : []))
+          .filter((item) => item?.url)
+          .map((item) => [item.url, item]),
+      ).values(),
+    ];
+    return {
+      ...primary,
+      keyword: umbrella,
+      articleGroupKey: primary.articleGroupKey || umbrella,
+      mergeScope,
+      mergedFromKeywords: group.map((item) => item.keyword),
+      articleCountOverride: 1,
+      clusterRole: "기둥글",
+      evidence,
+      angles: [],
+    };
+  });
+
+  consolidated.sort(
+    (a, b) =>
+      Number(b.scores?.sourceability || 0) -
+        Number(a.scores?.sourceability || 0) ||
+      Number(b.scores?.demand || 0) - Number(a.scores?.demand || 0),
+  );
+  const selected = consolidated.slice(0, settings.keywordsPerCategory);
   if (!selected.length)
     throw new Error(
       `${category.name}: 사전검증을 통과한 키워드를 확보하지 못했습니다. 자동 재조사 대상으로 넘깁니다.`,
@@ -750,8 +817,18 @@ export async function createAngleStage(
         },
       ];
 
+  const targetArticleCount = Math.max(
+    1,
+    Math.min(
+      settings.articlesPerKeyword,
+      Number(input.keyword?.articleCountOverride || settings.articlesPerKeyword),
+    ),
+  );
+  const mergeScope = Array.isArray(input.keyword?.mergeScope)
+    ? input.keyword.mergeScope.map(String).filter(Boolean)
+    : [];
   const angles = Array.from(
-    { length: settings.articlesPerKeyword },
+    { length: targetArticleCount },
     (_, index) => {
       const template = templates[index % templates.length];
       const cycle = Math.floor(index / templates.length);
@@ -761,7 +838,13 @@ export async function createAngleStage(
         searchQuestion: template.question,
         readerSituation: template.situation,
         answerPromise: template.promise,
-        mustCover: template.mustCover,
+        mustCover:
+          mergeScope.length > 1
+            ? [
+                `함께 다룰 대상: ${mergeScope.join(" · ")}`,
+                ...template.mustCover.slice(0, 2),
+              ]
+            : template.mustCover,
         evidenceCoverage: template.mustCover.map((requirement) => ({
           requirement,
           supported: false,
