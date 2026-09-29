@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import {
   getAutomationConfig,
   getCurrentWeekPlan,
+  getLatestRunningWeeklyPlanningProgress,
   hasDatabase,
   mondayOfKoreaWeek,
   reserveEstimatedCost,
@@ -18,6 +19,58 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "DATABASE_URL이 없습니다." }, { status: 400 });
     const body = await req.json().catch(() => ({}));
     const current = await getAutomationConfig();
+
+    const existingRunning = await getLatestRunningWeeklyPlanningProgress("manual");
+    if (existingRunning) {
+      const origin = new URL(req.url).origin;
+      const secret = process.env.CRON_SECRET;
+      if (!secret) throw new Error("CRON_SECRET이 없습니다.");
+      after(async () => {
+        await fetch(
+          `${origin}/api/cron/weekly-manual-worker?runKey=${encodeURIComponent(existingRunning.runKey)}`,
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${secret}` },
+            cache: "no-store",
+          },
+        ).catch(() => {});
+      });
+
+      const categories = Array.isArray(existingRunning.draft?.categories)
+        ? existingRunning.draft.categories
+        : [];
+      const articleCapacity = categories.reduce(
+        (sum: number, category: any) =>
+          sum +
+          (Array.isArray(category?.keywords)
+            ? category.keywords.reduce(
+                (keywordSum: number, keyword: any) =>
+                  keywordSum +
+                  (Array.isArray(keyword?.angles) && keyword.angles.length
+                    ? keyword.angles.length
+                    : Number(
+                        keyword?.articleCountOverride ||
+                          existingRunning.settings?.articlesPerKeyword ||
+                          current.articlesPerKeyword,
+                      )),
+                0,
+              )
+            : 0),
+        0,
+      );
+      const weeklyArticleTarget =
+        Number(existingRunning.settings?.dailyArticleLimit || current.dailyArticleLimit) * 7;
+
+      return NextResponse.json({
+        ok: true,
+        runKey: existingRunning.runKey,
+        status: "running",
+        resumedInterruptedRun: true,
+        existingCategoryCount: categories.length,
+        existingArticleCapacity: articleCapacity,
+        weeklyArticleTarget,
+      });
+    }
     const settings = {
       categoryCount: Number(body.categoryCount ?? current.categoryCount),
       keywordsPerCategory: Number(
