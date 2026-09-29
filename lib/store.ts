@@ -115,9 +115,13 @@ export async function ensureSchema() {
       draft jsonb,
       sources jsonb NOT NULL DEFAULT '[]'::jsonb,
       status text NOT NULL DEFAULT 'running',
+      error text,
+      failures integer NOT NULL DEFAULT 0,
       created_at timestamptz NOT NULL DEFAULT now(),
       updated_at timestamptz NOT NULL DEFAULT now()
     )`;
+      await sql`ALTER TABLE weekly_planning_runs ADD COLUMN IF NOT EXISTS error text`;
+      await sql`ALTER TABLE weekly_planning_runs ADD COLUMN IF NOT EXISTS failures integer NOT NULL DEFAULT 0`;
       await sql`CREATE TABLE IF NOT EXISTS article_jobs (
       id text PRIMARY KEY,
       week_start date NOT NULL REFERENCES weekly_plans(week_start) ON DELETE CASCADE,
@@ -581,7 +585,7 @@ export async function getPlanningSearchSnapshot() {
 
 export async function getWeeklyPlanningProgress(runKey: string) {
   await ensureSchema();
-  const [row] = await db()`SELECT run_key, week_start, mode, settings, draft, sources, status, created_at, updated_at
+  const [row] = await db()`SELECT run_key, week_start, mode, settings, draft, sources, status, error, failures, created_at, updated_at
     FROM weekly_planning_runs WHERE run_key=${runKey}`;
   if (!row) return null;
   return {
@@ -595,6 +599,8 @@ export async function getWeeklyPlanningProgress(runKey: string) {
     draft: row.draft || null,
     sources: row.sources || [],
     status: row.status as string,
+    error: row.error ? String(row.error) : "",
+    failures: Number(row.failures || 0),
     createdAt:
       row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
     updatedAt:
@@ -610,10 +616,12 @@ export async function saveWeeklyPlanningProgress(input: {
   draft: any | null;
   sources?: any[];
   status?: "running" | "ready" | "failed";
+  error?: string | null;
+  failures?: number;
 }) {
   await ensureSchema();
   await db()`INSERT INTO weekly_planning_runs
-    (run_key, week_start, mode, settings, draft, sources, status, updated_at)
+    (run_key, week_start, mode, settings, draft, sources, status, error, failures, updated_at)
     VALUES (
       ${input.runKey},
       ${input.weekStart},
@@ -622,6 +630,8 @@ export async function saveWeeklyPlanningProgress(input: {
       ${input.draft ? db().json(input.draft) : null},
       ${db().json(input.sources || [])},
       ${input.status || "running"},
+      ${input.error ?? null},
+      ${input.failures ?? 0},
       now()
     )
     ON CONFLICT (run_key) DO UPDATE SET
@@ -631,6 +641,8 @@ export async function saveWeeklyPlanningProgress(input: {
       draft=EXCLUDED.draft,
       sources=EXCLUDED.sources,
       status=EXCLUDED.status,
+      error=EXCLUDED.error,
+      failures=EXCLUDED.failures,
       updated_at=now()`;
 }
 
