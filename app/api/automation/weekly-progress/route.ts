@@ -42,6 +42,8 @@ export async function GET(req: NextRequest) {
       expectedAngles:
         keywordCount > 0 ? keywordCount : Number(progress.settings?.categoryCount || 0) * Number(progress.settings?.keywordsPerCategory || 0),
       updatedAt: progress.updatedAt,
+      error: progress.error || "",
+      failures: Number(progress.failures || 0),
     });
   } catch (error: any) {
     return NextResponse.json(
