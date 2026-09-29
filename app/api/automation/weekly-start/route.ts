@@ -50,9 +50,28 @@ export async function POST(req: Request) {
     const existingCategories = Array.isArray(existingPlan?.categories)
       ? existingPlan.categories
       : [];
+    const existingArticleCapacity = existingCategories.reduce(
+      (sum: number, category: any) =>
+        sum +
+        (Array.isArray(category?.keywords)
+          ? category.keywords.reduce(
+              (keywordSum: number, keyword: any) =>
+                keywordSum +
+                (Array.isArray(keyword?.angles) && keyword.angles.length
+                  ? keyword.angles.length
+                  : Number(
+                      keyword?.articleCountOverride ||
+                        settings.articlesPerKeyword,
+                    )),
+              0,
+            )
+          : 0),
+      0,
+    );
+    const weeklyArticleTarget = settings.dailyArticleLimit * 7;
     const canResumeExisting =
       existingCategories.length > 0 &&
-      existingCategories.length < settings.categoryCount;
+      existingArticleCapacity < weeklyArticleTarget;
 
     await saveWeeklyPlanningProgress({
       runKey,
@@ -90,6 +109,8 @@ export async function POST(req: Request) {
       status: "running",
       resumedExistingPlan: canResumeExisting,
       existingCategoryCount: canResumeExisting ? existingCategories.length : 0,
+      existingArticleCapacity: canResumeExisting ? existingArticleCapacity : 0,
+      weeklyArticleTarget,
     });
   } catch (error: any) {
     return NextResponse.json(
