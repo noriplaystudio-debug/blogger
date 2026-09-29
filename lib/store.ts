@@ -450,7 +450,11 @@ export async function persistWeeklyPlan(
     const protectedRows =
       await tx`SELECT category, keyword, angle FROM article_jobs
         WHERE week_start=${weekStart}
-          AND state NOT IN ('waiting','error')`;
+          AND state NOT IN ('waiting','error')
+          AND NOT (
+            state='working' AND
+            updated_at < now() - interval '15 minutes'
+          )`;
     const protectedSignatures = new Set(
       protectedRows.map((row) =>
         jobSignature(row.category, row.keyword, row.angle),
@@ -468,7 +472,14 @@ export async function persistWeeklyPlan(
       angle: row.angle || {},
     }));
     await tx`DELETE FROM article_jobs
-      WHERE week_start=${weekStart} AND state IN ('waiting','error')`;
+      WHERE week_start=${weekStart}
+        AND (
+          state IN ('waiting','error')
+          OR (
+            state='working' AND
+            updated_at < now() - interval '15 minutes'
+          )
+        )`;
     let ordinal = 0;
     for (const category of plan.categories)
       for (const keyword of category.keywords)
