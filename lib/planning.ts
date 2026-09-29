@@ -134,9 +134,11 @@ function curatePlan(plan: any, settings: PlanningSettings) {
         });
         return null;
       }
+      if (category.planningSkipped) return null;
       const keywords = (
         Array.isArray(category.keywords) ? category.keywords : []
       )
+        .filter((keyword: any) => !keyword?.planningSkipped)
         .map((keyword: any) => ({
           ...keyword,
           contentMode,
@@ -177,7 +179,11 @@ function curatePlan(plan: any, settings: PlanningSettings) {
                 score(keyword.scores?.uniqueValue, "keyword.uniqueValue") >=
                   55 &&
                 score(keyword.scores?.topicalFit, "keyword.topicalFit") >= 70 &&
-                sourceDomains.size >= 2 &&
+                (sourceDomains.size >= 2 ||
+                  (Array.isArray(keyword.verifiedClaims) &&
+                    keyword.verifiedClaims.some(
+                      (claim: any) => claim?.sourceType === "primary",
+                    ))) &&
                 keyword.confidence !== "낮음"
               : keyword.priorityScore >= 62 &&
                 score(keyword.scores?.durability, "keyword.durability") >= 50 &&
@@ -186,7 +192,11 @@ function curatePlan(plan: any, settings: PlanningSettings) {
                 score(keyword.scores?.uniqueValue, "keyword.uniqueValue") >=
                   60 &&
                 score(keyword.scores?.topicalFit, "keyword.topicalFit") >= 70 &&
-                sourceDomains.size >= 2 &&
+                (sourceDomains.size >= 2 ||
+                  (Array.isArray(keyword.verifiedClaims) &&
+                    keyword.verifiedClaims.some(
+                      (claim: any) => claim?.sourceType === "primary",
+                    ))) &&
                 keyword.confidence !== "낮음";
           const overlaps = usedKeywords.some(
             (used) => phraseSimilarity(used, keyword.keyword || "") >= 0.72,
@@ -525,13 +535,11 @@ function urlDomain(value: string) {
   }
 }
 
-function validPreflightClaims(value: any[], sources: any[]) {
-  // Two independently checked claims are enough for planning. Article production
-  // performs its own evidence verification again before publishing.
+function validPreflightClaims(value: any[], _sources: any[]) {
+  // Planning should verify structure and source diversity, but must not depend on
+  // the provider returning every opened page again in the citation envelope.
+  // Article production performs a fresh evidence check before publication.
   if (!Array.isArray(value) || value.length < 2) return false;
-  const openedDomains = new Set(
-    (sources || []).map((source: any) => urlDomain(source?.url)).filter(Boolean),
-  );
   const claimDomains = new Set<string>();
   let hasPrimary = false;
   for (const claim of value) {
@@ -540,7 +548,6 @@ function validPreflightClaims(value: any[], sources: any[]) {
       !String(claim?.id || "").trim() ||
       !String(claim?.statement || "").trim() ||
       !domain ||
-      !openedDomains.has(domain) ||
       !["primary", "authoritative_secondary"].includes(claim?.sourceType) ||
       !["stable", "changing"].includes(claim?.timeSensitivity)
     )
@@ -637,7 +644,13 @@ JSON만 출력한다: {"weekLabel":"YYYY-MM-DD 시작 주간","marketSummary":"�
         Number(a.scores?.sourceability || 0) ||
       Number(b.scores?.demand || 0) - Number(a.scores?.demand || 0),
   );
-  const selectedCategories = eligibleCategories.slice(0, settings.categoryCount);
+  const selectedCategories = eligibleCategories.slice(
+    0,
+    Math.min(
+      20,
+      Math.max(settings.categoryCount * 2, settings.categoryCount + 3),
+    ),
+  );
   if (!selectedCategories.length)
     throw new Error(
       "독립 근거 출처 2곳 이상을 확보한 카테고리가 없습니다. 다음 실행에서 후보를 다시 조사합니다.",
@@ -910,12 +923,14 @@ JSON만 출력한다: {"angles":[{"titleIdea":"과장 없는 제목 방향","pur
   }
   for (const fallback of fallbackAngles) {
     if (angles.length >= settings.articlesPerKeyword) break;
-    if (verifiedClaims.length < 3) break;
+    if (verifiedClaims.length < 2) break;
     let titleIdea = `${keyword}: ${fallback.suffix}`;
     if (names.has(normalized(titleIdea)))
       titleIdea = `${titleIdea} ${angles.length + 1}`;
     names.add(normalized(titleIdea));
-    const mustCover = verifiedClaims.slice(0, 3).map((claim: any) => claim.statement);
+    const mustCover = verifiedClaims
+      .slice(0, Math.min(3, verifiedClaims.length))
+      .map((claim: any) => claim.statement);
     const coverage = mustCover.map((requirement: string, index: number) => ({
       requirement,
       supported: true,
