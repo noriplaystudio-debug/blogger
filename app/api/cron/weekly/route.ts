@@ -40,6 +40,29 @@ function mergeSources(left: any[] = [], right: any[] = []) {
   ];
 }
 
+function plannedArticleCapacity(draft: any, settings: any) {
+  return (draft?.categories || [])
+    .filter((category: any) => !category?.planningSkipped)
+    .reduce(
+      (sum: number, category: any) =>
+        sum +
+        (category.keywords || [])
+          .filter((keyword: any) => !keyword?.planningSkipped)
+          .reduce(
+            (keywordSum: number, keyword: any) =>
+              keywordSum +
+              (Array.isArray(keyword.angles) && keyword.angles.length
+                ? keyword.angles.length
+                : Number(
+                    keyword.articleCountOverride ||
+                      settings.articlesPerKeyword,
+                  )),
+            0,
+          ),
+      0,
+    );
+}
+
 function sameSettings(left: any, right: any) {
   return (
     Number(left?.categoryCount) === Number(right?.categoryCount) &&
@@ -69,24 +92,27 @@ export async function GET(req: NextRequest) {
     const currentCategories = Array.isArray(currentWeek?.plan?.categories)
       ? currentWeek!.plan.categories
       : [];
+    const currentArticleCapacity = currentCategories.reduce(
+      (sum: number, category: any) =>
+        sum +
+        (Array.isArray(category?.keywords)
+          ? category.keywords.reduce(
+              (keywordSum: number, keyword: any) =>
+                keywordSum +
+                (Array.isArray(keyword?.angles) && keyword.angles.length
+                  ? keyword.angles.length
+                  : Number(
+                      keyword?.articleCountOverride ||
+                        config.articlesPerKeyword,
+                    )),
+              0,
+            )
+          : 0),
+      0,
+    );
     const currentPlanComplete =
       currentCategories.length >= config.categoryCount &&
-      currentCategories
-        .slice(0, config.categoryCount)
-        .every(
-          (category: any) =>
-            Array.isArray(category.keywords) &&
-            (category.keywords.some((keyword: any) => keyword?.singleKeywordCategory === true)
-              ? category.keywords.length >= 1
-              : category.keywords.length >= config.keywordsPerCategory) &&
-            category.keywords
-              .slice(0, config.keywordsPerCategory)
-              .every(
-                (keyword: any) =>
-                  Array.isArray(keyword.angles) &&
-                  keyword.angles.length >= config.articlesPerKeyword,
-              ),
-        );
+      currentArticleCapacity >= config.dailyArticleLimit * 7;
     if (currentPlanComplete)
       return NextResponse.json({
         skipped: true,
@@ -184,12 +210,36 @@ export async function GET(req: NextRequest) {
           Array.isArray(category.keywords) &&
           category.keywords.length > 0,
       ).length;
-      const activeCandidateCount = (draft.categories || []).filter(
-        (category: any) => !category?.planningSkipped,
-      ).length;
+      const weeklyArticleTarget = Number(settings.dailyArticleLimit) * 7;
+      let articleCapacity = plannedArticleCapacity(draft, settings);
+      const activeCandidates = () =>
+        (draft.categories || []).filter(
+          (category: any) => !category?.planningSkipped,
+        );
+      const hasUnprocessedCandidate = () =>
+        activeCandidates().some(
+          (category: any) =>
+            !Array.isArray(category.keywords) || category.keywords.length === 0,
+        );
+
       if (
-        completedCategoryCount < Number(settings.categoryCount) &&
-        activeCandidateCount < Number(settings.categoryCount) &&
+        completedCategoryCount >= Number(settings.categoryCount) &&
+        articleCapacity >= weeklyArticleTarget
+      ) {
+        for (const category of draft.categories || []) {
+          if (
+            !category?.planningSkipped &&
+            (!Array.isArray(category.keywords) || category.keywords.length === 0)
+          )
+            category.planningSkipped = true;
+        }
+      }
+
+      if (
+        completedCategoryCount >= Number(settings.categoryCount) &&
+        articleCapacity < weeklyArticleTarget &&
+        !hasUnprocessedCandidate() &&
+        activeCandidates().length < 20 &&
         stageCalls < MAX_STAGE_CALLS_PER_INVOCATION
       ) {
         const categoryResult = await createCategoryStage(process.env.OPENAI_API_KEY, {
@@ -208,10 +258,14 @@ export async function GET(req: NextRequest) {
           ),
         );
         for (const category of categoryResult.draft?.categories || []) {
+          if (activeCandidates().length >= 20) break;
           const key = String(category?.name || "").trim().toLowerCase();
           if (!key || existingNames.has(key)) continue;
           existingNames.add(key);
-          draft.categories.push(category);
+          draft.categories.push({
+            ...category,
+            supplementalCategory: true,
+          });
         }
         sources = mergeSources(sources, categoryResult.sources || []);
         stageCalls += 1;
@@ -224,21 +278,7 @@ export async function GET(req: NextRequest) {
           sources,
           status: "running",
         });
-        completedCategoryCount = (draft.categories || []).filter(
-          (category: any) =>
-            !category?.planningSkipped &&
-            Array.isArray(category.keywords) &&
-            category.keywords.length > 0,
-        ).length;
-      }
-      if (completedCategoryCount >= Number(settings.categoryCount)) {
-        for (const category of draft.categories || []) {
-          if (
-            !category?.planningSkipped &&
-            (!Array.isArray(category.keywords) || category.keywords.length === 0)
-          )
-            category.planningSkipped = true;
-        }
+        articleCapacity = plannedArticleCapacity(draft, settings);
       }
 
       const categoryNeedingKeywords = draft.categories.find(
