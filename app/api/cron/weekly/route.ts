@@ -146,6 +146,22 @@ export async function GET(req: NextRequest) {
     }
 
     while (draft && stageCalls < MAX_STAGE_CALLS_PER_INVOCATION) {
+      const completedCategoryCount = (draft.categories || []).filter(
+        (category: any) =>
+          !category?.planningSkipped &&
+          Array.isArray(category.keywords) &&
+          category.keywords.length > 0,
+      ).length;
+      if (completedCategoryCount >= Number(settings.categoryCount)) {
+        for (const category of draft.categories || []) {
+          if (
+            !category?.planningSkipped &&
+            (!Array.isArray(category.keywords) || category.keywords.length === 0)
+          )
+            category.planningSkipped = true;
+        }
+      }
+
       const categoryNeedingKeywords = draft.categories.find(
         (category: any) =>
           !category?.planningSkipped &&
@@ -180,36 +196,27 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
-      let angleTarget: { category: any; keyword: any } | null = null;
-      for (const category of draft.categories) {
+      let generatedAngles = 0;
+      for (const category of draft.categories || []) {
+        if (category?.planningSkipped) continue;
         for (const keyword of category.keywords || []) {
+          if (keyword?.planningSkipped) continue;
           if (
-            !keyword?.planningSkipped &&
-            (!Array.isArray(keyword.angles) ||
-              keyword.angles.length !== settings.articlesPerKeyword)
+            !Array.isArray(keyword.angles) ||
+            keyword.angles.length !== settings.articlesPerKeyword
           ) {
-            angleTarget = { category, keyword };
-            break;
+            const angleResult = await createAngleStage(process.env.OPENAI_API_KEY, {
+              category,
+              keyword,
+              settings,
+            });
+            keyword.angles = angleResult.angles;
+            keyword.planningFailures = 0;
+            generatedAngles += 1;
           }
         }
-        if (angleTarget) break;
       }
-
-      if (angleTarget) {
-        try {
-          const angleResult = await createAngleStage(process.env.OPENAI_API_KEY, {
-            category: angleTarget.category,
-            keyword: angleTarget.keyword,
-            settings,
-          });
-          angleTarget.keyword.angles = angleResult.angles;
-          angleTarget.keyword.planningFailures = 0;
-        } catch (error: any) {
-          const failures = Number(angleTarget.keyword.planningFailures || 0) + 1;
-          angleTarget.keyword.planningFailures = failures;
-          if (failures >= 2) angleTarget.keyword.planningSkipped = true;
-        }
-        stageCalls += 1;
+      if (generatedAngles > 0) {
         await saveWeeklyPlanningProgress({
           runKey,
           weekStart,
@@ -219,7 +226,6 @@ export async function GET(req: NextRequest) {
           sources,
           status: "running",
         });
-        continue;
       }
 
       break;
