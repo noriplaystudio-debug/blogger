@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port 3000",
-    "build": "next build",
+    "build": "npm run verify && next build",
     "start": "next start --port 3000",
     "naver:bridge": "node scripts/naver-bridge.mjs",
     "verify": "node scripts/verify-requirements.mjs && node scripts/verify-api-contracts.mjs && node --import tsx scripts/verify-production-resilience.ts",
