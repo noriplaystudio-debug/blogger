@@ -34,6 +34,29 @@ function mergeSources(left: any[] = [], right: any[] = []) {
   ];
 }
 
+function plannedArticleCapacity(draft: any, settings: any) {
+  return (draft?.categories || [])
+    .filter((category: any) => !category?.planningSkipped)
+    .reduce(
+      (sum: number, category: any) =>
+        sum +
+        (category.keywords || [])
+          .filter((keyword: any) => !keyword?.planningSkipped)
+          .reduce(
+            (keywordSum: number, keyword: any) =>
+              keywordSum +
+              (Array.isArray(keyword.angles) && keyword.angles.length
+                ? keyword.angles.length
+                : Number(
+                    keyword.articleCountOverride ||
+                      settings.articlesPerKeyword,
+                  )),
+            0,
+          ),
+      0,
+    );
+}
+
 async function queueNext(req: NextRequest, runKey: string) {
   const origin = new URL(req.url).origin;
   const secret = process.env.CRON_SECRET;
@@ -113,13 +136,40 @@ export async function POST(req: NextRequest) {
         Array.isArray(category.keywords) &&
         category.keywords.length > 0,
     ).length;
+    const weeklyArticleTarget = Number(settings.dailyArticleLimit) * 7;
+    let articleCapacity = plannedArticleCapacity(draft, settings);
 
-    const activeCandidateCount = (draft.categories || []).filter(
-      (category: any) => !category?.planningSkipped,
-    ).length;
+    const activeCandidates = () =>
+      (draft.categories || []).filter(
+        (category: any) => !category?.planningSkipped,
+      );
+
+    // Once the base category target is met, keep using reserve categories only
+    // when consolidation leaves the week short of seven days of content.
     if (
-      completedCategoryCount < Number(settings.categoryCount) &&
-      activeCandidateCount < Number(settings.categoryCount)
+      completedCategoryCount >= Number(settings.categoryCount) &&
+      articleCapacity >= weeklyArticleTarget
+    ) {
+      for (const category of draft.categories || []) {
+        if (
+          !category?.planningSkipped &&
+          (!Array.isArray(category.keywords) || category.keywords.length === 0)
+        )
+          category.planningSkipped = true;
+      }
+    }
+
+    const hasUnprocessedCandidate = () =>
+      activeCandidates().some(
+        (category: any) =>
+          !Array.isArray(category.keywords) || category.keywords.length === 0,
+      );
+
+    if (
+      completedCategoryCount >= Number(settings.categoryCount) &&
+      articleCapacity < weeklyArticleTarget &&
+      !hasUnprocessedCandidate() &&
+      activeCandidates().length < 20
     ) {
       const [performanceGuidance, strategyGuidance] = await Promise.all([
         getPortfolioPerformanceGuidance(),
@@ -141,10 +191,14 @@ export async function POST(req: NextRequest) {
         ),
       );
       for (const category of categoryResult.draft?.categories || []) {
+        if (activeCandidates().length >= 20) break;
         const key = String(category?.name || "").trim().toLowerCase();
         if (!key || existingNames.has(key)) continue;
         existingNames.add(key);
-        draft.categories.push(category);
+        draft.categories.push({
+          ...category,
+          supplementalCategory: true,
+        });
       }
       sources = mergeSources(sources, categoryResult.sources || []);
       await saveWeeklyPlanningProgress({
@@ -158,21 +212,7 @@ export async function POST(req: NextRequest) {
         error: null,
         failures: 0,
       });
-      completedCategoryCount = (draft.categories || []).filter(
-        (category: any) =>
-          !category?.planningSkipped &&
-          Array.isArray(category.keywords) &&
-          category.keywords.length > 0,
-      ).length;
-    }
-    if (completedCategoryCount >= Number(settings.categoryCount)) {
-      for (const category of draft.categories || []) {
-        if (
-          !category?.planningSkipped &&
-          (!Array.isArray(category.keywords) || category.keywords.length === 0)
-        )
-          category.planningSkipped = true;
-      }
+      articleCapacity = plannedArticleCapacity(draft, settings);
     }
 
     const categoryNeedingKeywords = draft.categories?.find(
@@ -312,6 +352,17 @@ export async function POST(req: NextRequest) {
       phase: "finalize",
       categories: plan.categories.length,
       tasks: workspace.tasks.length,
+      articleCapacity: plan.categories.reduce(
+        (sum: number, category: any) =>
+          sum +
+          category.keywords.reduce(
+            (keywordSum: number, keyword: any) =>
+              keywordSum + keyword.angles.length,
+            0,
+          ),
+        0,
+      ),
+      weeklyArticleTarget,
     });
     return NextResponse.json({
       ok: true,
