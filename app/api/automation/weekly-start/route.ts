@@ -2,6 +2,7 @@ import { after, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import {
   getAutomationConfig,
+  getCurrentWeekPlan,
   hasDatabase,
   mondayOfKoreaWeek,
   reserveEstimatedCost,
@@ -44,13 +45,28 @@ export async function POST(req: Request) {
         { status: 429 },
       );
 
+    const currentWeek = await getCurrentWeekPlan();
+    const existingPlan = currentWeek?.plan;
+    const existingCategories = Array.isArray(existingPlan?.categories)
+      ? existingPlan.categories
+      : [];
+    const canResumeExisting =
+      existingCategories.length > 0 &&
+      existingCategories.length < settings.categoryCount;
+
     await saveWeeklyPlanningProgress({
       runKey,
       weekStart,
       mode: "manual",
       settings,
-      draft: null,
-      sources: [],
+      draft: canResumeExisting
+        ? {
+            ...existingPlan,
+            categories: existingCategories,
+            resumedFromExistingPlan: true,
+          }
+        : null,
+      sources: canResumeExisting ? currentWeek?.sources || [] : [],
       status: "running",
     });
 
@@ -68,7 +84,13 @@ export async function POST(req: Request) {
       ).catch(() => {});
     });
 
-    return NextResponse.json({ ok: true, runKey, status: "running" });
+    return NextResponse.json({
+      ok: true,
+      runKey,
+      status: "running",
+      resumedExistingPlan: canResumeExisting,
+      existingCategoryCount: canResumeExisting ? existingCategories.length : 0,
+    });
   } catch (error: any) {
     return NextResponse.json(
       { error: error?.message || "주간 계획 시작 실패" },
