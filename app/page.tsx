@@ -1466,12 +1466,20 @@ export default function Home() {
           `일일 자동화 실행은 건너뛰었습니다: ${data.reason || "실행 조건 미충족"}`,
         );
       } else {
-        const processed = Number(data.processed || 0);
-        const syncedDrafts = Number(data.syncedDrafts || 0);
-        const deferred = Number(data.deferred || 0);
-        setMessage(
-          `일일 자동화를 완료했습니다. 새 처리 ${processed}건 · Blogger 임시저장 동기화 ${syncedDrafts}건${deferred ? ` · 다음 실행 이월 ${deferred}건` : ""}.`,
-        );
+        const queued = Number(data.queued || 0);
+        const queuedReady = Number(data.queuedReady || 0);
+        const queuedProduction = Number(data.queuedProduction || 0);
+        const publishedToday = Number(data.publishedToday || 0);
+        const recovered = Number(data.recovered || 0);
+        if (queued > 0) {
+          setMessage(
+            `일일 자동화를 시작했습니다. 백그라운드 작성·게시 ${queued}건 진행 중${queuedReady ? ` · 기존 완성글 ${queuedReady}건` : ""}${queuedProduction ? ` · 새 작성 ${queuedProduction}건` : ""}${recovered ? ` · 복구 ${recovered}건` : ""}. 완료되면 공개 수에 반영됩니다.`,
+          );
+        } else {
+          setMessage(
+            `현재 새로 시작할 작업이 없습니다. 오늘 공개 ${publishedToday}건입니다.`,
+          );
+        }
       }
     } catch (error: any) {
       setMessage(error?.message || "일일 자동화를 수동 실행하지 못했습니다.");
