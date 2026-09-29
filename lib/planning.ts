@@ -114,15 +114,15 @@ function curatePlan(plan: any, settings: PlanningSettings) {
       );
       const categoryGate =
         contentMode === "realtime"
-          ? categoryScore >= 62 &&
-            score(category.scores?.demand, "demand") >= 60 &&
-            score(category.scores?.momentum, "momentum") >= 70 &&
-            score(category.scores?.adSafety, "adSafety") >= 80 &&
-            score(category.scores?.sourceability, "sourceability") >= 70
-          : categoryScore >= 60 &&
-            score(category.scores?.durability, "durability") >= 55 &&
-            score(category.scores?.adSafety, "adSafety") >= 75 &&
-            score(category.scores?.sourceability, "sourceability") >= 60;
+          ? categoryScore >= 52 &&
+            score(category.scores?.demand, "demand") >= 45 &&
+            score(category.scores?.momentum, "momentum") >= 50 &&
+            score(category.scores?.adSafety, "adSafety") >= 65 &&
+            score(category.scores?.sourceability, "sourceability") >= 45
+          : categoryScore >= 50 &&
+            score(category.scores?.durability, "durability") >= 40 &&
+            score(category.scores?.adSafety, "adSafety") >= 65 &&
+            score(category.scores?.sourceability, "sourceability") >= 40;
       if (!categoryGate) {
         rejected.push({
           type: "category",
@@ -171,23 +171,23 @@ function curatePlan(plan: any, settings: PlanningSettings) {
           const sourceDomains = evidenceDomains(keyword.evidence);
           const gatePassed =
             contentMode === "realtime"
-              ? keyword.priorityScore >= 62 &&
-                score(keyword.scores?.demand, "keyword.demand") >= 60 &&
-                score(keyword.scores?.momentum, "keyword.momentum") >= 70 &&
+              ? keyword.priorityScore >= 50 &&
+                score(keyword.scores?.demand, "keyword.demand") >= 45 &&
+                score(keyword.scores?.momentum, "keyword.momentum") >= 50 &&
                 score(keyword.scores?.sourceability, "keyword.sourceability") >=
-                  70 &&
+                  40 &&
                 score(keyword.scores?.uniqueValue, "keyword.uniqueValue") >=
-                  55 &&
-                score(keyword.scores?.topicalFit, "keyword.topicalFit") >= 70 &&
+                  40 &&
+                score(keyword.scores?.topicalFit, "keyword.topicalFit") >= 50 &&
                 sourceDomains.size >= 1 &&
                 keyword.confidence !== "낮음"
-              : keyword.priorityScore >= 62 &&
-                score(keyword.scores?.durability, "keyword.durability") >= 50 &&
+              : keyword.priorityScore >= 50 &&
+                score(keyword.scores?.durability, "keyword.durability") >= 35 &&
                 score(keyword.scores?.sourceability, "keyword.sourceability") >=
-                  60 &&
+                  40 &&
                 score(keyword.scores?.uniqueValue, "keyword.uniqueValue") >=
-                  60 &&
-                score(keyword.scores?.topicalFit, "keyword.topicalFit") >= 70 &&
+                  40 &&
+                score(keyword.scores?.topicalFit, "keyword.topicalFit") >= 50 &&
                 sourceDomains.size >= 1 &&
                 keyword.confidence !== "낮음";
           const overlaps = usedKeywords.some(
@@ -626,10 +626,7 @@ JSON만 출력한다: {"weekLabel":"YYYY-MM-DD 시작 주간","marketSummary":"�
   );
   const selectedCategories = eligibleCategories.slice(
     0,
-    Math.min(
-      20,
-      Math.max(settings.categoryCount * 2, settings.categoryCount + 3),
-    ),
+    Math.min(10, Math.max(settings.categoryCount + 2, settings.categoryCount)),
   );
   if (!selectedCategories.length)
     throw new Error(
@@ -742,7 +739,7 @@ JSON만 출력한다: {"keywords":[{"keyword":"구체적 검색어","contentMode
 }
 
 export async function createAngleStage(
-  apiKey: string,
+  _apiKey: string,
   input: {
     category: any;
     keyword: any;
@@ -750,223 +747,91 @@ export async function createAngleStage(
   },
 ) {
   const settings = normalizePlanningSettings(input.settings);
-  const response = await new OpenAI({ apiKey }).responses.create({
-    model: process.env.RESEARCH_MODEL || "gpt-5.6-terra",
-    reasoning: { effort: "medium" },
-    max_output_tokens: Math.min(
-      12000,
-      4000 + 1600 * settings.articlesPerKeyword,
-    ),
-    text: { format: { type: "json_object" } },
-    input: `이미 조사와 출처 확인을 마친 키워드로 서로 중복되지 않는 글 방향 ${settings.articlesPerKeyword}개를 만든다. 웹 검색은 다시 하지 않고 제공된 근거만 사용한다.
+  const keyword = String(input.keyword?.keyword || "검색 주제").trim();
+  const realtime = input.category?.contentMode === "realtime";
+  const templates = realtime
+    ? [
+        {
+          suffix: "현재 상황·핵심 일정·확인 방법",
+          purpose: "지금 확인해야 할 핵심 정보와 이후 변동 가능성을 빠르게 정리한다.",
+          question: `${keyword}의 현재 상황과 핵심 일정은 어떻게 확인하면 되나?`,
+          situation: "최신 상황과 다음 일정을 빠르게 확인하려는 독자",
+          promise: "현재 기준 핵심 내용과 공식 재확인 경로를 한 번에 확인할 수 있다.",
+          mustCover: ["현재 기준 핵심 상황", "중요 일정·변경 가능 항목", "다시 확인할 경로와 시점"],
+          value: "현재 기준 요약 + 다음 확인 시점 체크리스트",
+        },
+        {
+          suffix: "알아둘 포인트·변경사항·FAQ",
+          purpose: "검색 직후 자주 생기는 질문과 헷갈리는 부분을 실용적으로 정리한다.",
+          question: `${keyword}에서 지금 가장 많이 헷갈리는 점은 무엇인가?`,
+          situation: "짧은 시간 안에 핵심만 파악하고 싶은 독자",
+          promise: "확정 정보와 아직 바뀔 수 있는 내용을 구분해서 이해할 수 있다.",
+          mustCover: ["핵심 포인트", "달라질 수 있는 내용", "자주 묻는 질문과 확인 팁"],
+          value: "확정/변동 가능 정보를 나눈 실용형 FAQ",
+        },
+      ]
+    : [
+        {
+          suffix: "핵심 조건·방법·체크리스트",
+          purpose: "검색 의도에 바로 답하고 실행에 필요한 조건과 순서를 정리한다.",
+          question: `${keyword}를 알아볼 때 무엇부터 확인해야 하나?`,
+          situation: "처음 정보를 찾고 실제로 적용하려는 독자",
+          promise: "핵심 조건과 실행 순서를 빠르게 파악할 수 있다.",
+          mustCover: ["핵심 조건과 전제", "실행 순서", "실수하기 쉬운 점과 확인 방법"],
+          value: "조건·순서·주의점을 한 번에 보는 체크리스트",
+        },
+        {
+          suffix: "선택 기준·비교 포인트·FAQ",
+          purpose: "여러 선택지나 상황 차이를 비교해 독자가 스스로 판단하게 돕는다.",
+          question: `${keyword}에서 내 상황에 맞는 선택 기준은 무엇인가?`,
+          situation: "정보는 찾았지만 어떤 선택이 맞는지 비교하려는 독자",
+          promise: "상황별 차이와 선택 기준을 이해하고 적합한 방법을 고를 수 있다.",
+          mustCover: ["상황별 차이", "비교 기준", "자주 묻는 질문과 예외"],
+          value: "동일 기준 비교표 + 상황별 선택 가이드",
+        },
+      ];
 
-카테고리: ${JSON.stringify(input.category)}
-키워드: ${JSON.stringify(input.keyword)}
-
-각 글은 독자 상황·검색 질문·답변 약속·구성·고유 가치가 실제로 달라야 한다. 제목만 바꾼 중복 글을 만들지 않는다. realtime이면 확인 기준일·다음 일정·공식 재확인 경로를 mustCover에 포함하고 루머나 추측을 제외한다. eventDate가 현재보다 뒤이거나 행사가 진행 중이면 확정되지 않은 수상작·우승·최종 결과를 약속하지 말고 일정·후보·현재까지의 결과로 제목과 답변 약속을 바꾼다. 근거로 답할 수 없는 방향은 만들지 않는다.
-
-이 단계는 글의 구성과 독자 질문을 설계하는 단계다. 사실 근거의 최종 확보 여부로 글 방향을 탈락시키지 않는다. mustCover에는 독자가 반드시 알고 싶어 할 질문·비교 기준·절차·주의점을 넣고, 실제 사실·수치·조건은 글 작성 단계에서 웹 검색으로 다시 검증한다.
-
-JSON만 출력한다: {"angles":[{"titleIdea":"과장 없는 제목 방향","purpose":"다른 글과의 차별화","searchQuestion":"독자의 구체적 질문","readerSituation":"이 답이 필요한 상황","answerPromise":"읽고 나면 할 수 있는 판단 또는 행동","mustCover":["필수 질문·확인 항목 1","필수 질문·확인 항목 2","필수 질문·확인 항목 3"],"exclusions":["다루지 않을 범위"],"uniqueValue":"기준표·계산·절차·예외 등 고유 가치"}]}`,
-  });
-  let candidates: any[] = [];
-  try {
-    const value = parseJson<any>(response.output_text);
-    candidates = Array.isArray(value)
-      ? value
-      : Array.isArray(value?.angles)
-        ? value.angles
-        : [];
-  } catch {
-    candidates = [];
-  }
-
-  const keyword = String(input.keyword.keyword || "검색 주제").trim();
-  const fallbackAngles = [
-    {
-      suffix: "핵심 일정·조건과 공식 확인 방법",
-      purpose: "현재 기준 핵심 일정과 적용 조건을 빠르게 확인하게 한다.",
-      question: `${keyword}의 정확한 일정과 적용 조건은 무엇인가?`,
-      situation: "검색 직후 일정과 자격·적용 조건을 확인하려는 독자",
-      promise: "공식 자료를 기준으로 일정·조건·확인 경로를 구분할 수 있다.",
-      mustCover: ["기준일과 핵심 일정", "대상과 적용 조건", "공식 재확인 경로"],
-      value: "일정·조건·공식 링크를 한눈에 보는 요약표",
-    },
-    {
-      suffix: "신청·이용 순서와 실패할 때 대처법",
-      purpose: "실행 순서와 막히는 지점의 해결 방법을 단계별로 안내한다.",
-      question: `${keyword}는 어떤 순서로 진행하고 실패하면 어떻게 대처해야 하나?`,
-      situation: "직접 신청하거나 서비스를 이용하려는 독자",
-      promise:
-        "준비부터 완료 확인까지 순서대로 실행하고 오류에 대처할 수 있다.",
-      mustCover: [
-        "사전 준비사항",
-        "단계별 실행 순서",
-        "실패·지연 시 대처 방법",
-      ],
-      value: "실행 체크리스트와 오류별 대처표",
-    },
-    {
-      suffix: "대상별 예외·주의사항 체크리스트",
-      purpose: "일반 안내에서 놓치기 쉬운 대상별 예외와 주의사항을 정리한다.",
-      question: `${keyword}에서 내 상황에 따라 달라지는 예외와 주의점은 무엇인가?`,
-      situation:
-        "기본 안내는 확인했지만 자신의 상황에 적용되는지 판단하려는 독자",
-      promise: "대상별 예외를 확인하고 잘못된 신청이나 판단을 피할 수 있다.",
-      mustCover: ["대상별 차이", "적용되지 않는 경우", "실수하기 쉬운 항목"],
-      value: "대상별 예외와 주의사항 비교표",
-    },
-    {
-      suffix: "선택지 비교와 상황별 판단 기준",
-      purpose: "가능한 선택지를 같은 기준으로 비교해 상황별 결정을 돕는다.",
-      question: `${keyword}와 관련된 선택지 중 내 상황에는 무엇이 적합한가?`,
-      situation: "둘 이상의 방법이나 조건을 비교하는 독자",
-      promise: "비용·시간·조건·위험을 기준으로 적합한 선택지를 고를 수 있다.",
-      mustCover: ["선택지별 조건", "비용·시간 비교", "상황별 추천 기준"],
-      value: "동일 기준으로 정리한 선택지 비교표",
-    },
-    {
-      suffix: "변경사항 재확인 시점과 자주 묻는 질문",
-      purpose: "정보가 바뀔 수 있는 시점과 반복 질문을 공식 근거로 정리한다.",
-      question: `${keyword} 정보는 언제 다시 확인해야 하고 무엇이 자주 바뀌는가?`,
-      situation: "이전에 본 정보가 현재도 유효한지 확인하려는 독자",
-      promise:
-        "변경 가능 항목과 재확인 시점을 알고 최신 정보를 확인할 수 있다.",
-      mustCover: ["변경 가능 항목", "재확인할 시점", "공식 문의·확인 경로"],
-      value: "변경 감시 항목과 FAQ 체크리스트",
-    },
-  ];
-  const names = new Set<string>();
-  const angles: any[] = [];
-  const verifiedClaims = Array.isArray(input.keyword.verifiedClaims)
-    ? input.keyword.verifiedClaims
-    : [];
-  const verifiedClaimIds = new Set(
-    verifiedClaims.map((claim: any) => String(claim.id)),
-  );
-  for (const candidate of candidates) {
-    if (angles.length >= settings.articlesPerKeyword) break;
-    const name = normalized(candidate?.titleIdea || "");
-    if (!name || names.has(name)) continue;
-    names.add(name);
-    const fallback = fallbackAngles[angles.length];
-    const mustCover = Array.isArray(candidate.mustCover)
-      ? candidate.mustCover.map(String).filter(Boolean).slice(0, 8)
-      : [];
-    for (const item of fallback.mustCover)
-      if (mustCover.length < 3 && !mustCover.includes(item))
-        mustCover.push(item);
-    const coverage = mustCover.map((requirement: string) => ({
-      requirement,
-      supported: false,
-      claimIds: [],
-      gap: "글 작성 단계에서 근거 재확인",
-    }));
-    angles.push({
-      titleIdea: String(candidate.titleIdea).trim(),
-      purpose: String(candidate.purpose || fallback.purpose).trim(),
-      searchQuestion: String(
-        candidate.searchQuestion || fallback.question,
-      ).trim(),
-      readerSituation: String(
-        candidate.readerSituation || fallback.situation,
-      ).trim(),
-      answerPromise: String(candidate.answerPromise || fallback.promise).trim(),
-      mustCover,
-      evidenceCoverage: coverage,
-      exclusions: Array.isArray(candidate.exclusions)
-        ? candidate.exclusions.map(String).filter(Boolean).slice(0, 8)
-        : ["공식 근거로 확인되지 않은 추측과 개인 경험 일반화"],
-      uniqueValue: String(candidate.uniqueValue || fallback.value).trim(),
-      ...(verifiedClaims.length >= 2
-        ? {
-            prevalidatedDossier: {
-              checkedAt:
-                input.keyword.sourceCheckedAt || new Date().toISOString(),
-              readerNeed: String(
-                candidate.searchQuestion || fallback.question,
-              ).trim(),
-              directAnswer: String(input.keyword.directAnswer || "").trim(),
-              scope: `${input.category.name} · ${input.keyword.keyword}`,
-              claims: verifiedClaims,
-              conflicts: [],
-              unknowns: [],
-              coverage,
-              practicalSteps: Array.isArray(input.keyword.practicalSteps)
-                ? input.keyword.practicalSteps
-                : [],
-              uniqueValuePlan: Array.isArray(input.keyword.uniqueValuePlan)
-                ? input.keyword.uniqueValuePlan
-                : [String(candidate.uniqueValue || fallback.value)],
-            },
-            prevalidatedSources: input.keyword.verifiedSources || [],
-          }
-        : {}),
-    });
-  }
-  for (const fallback of fallbackAngles) {
-    if (angles.length >= settings.articlesPerKeyword) break;
-
-    let titleIdea = `${keyword}: ${fallback.suffix}`;
-    if (names.has(normalized(titleIdea)))
-      titleIdea = `${titleIdea} ${angles.length + 1}`;
-    names.add(normalized(titleIdea));
-    const mustCover =
-      verifiedClaims.length >= 2
-        ? verifiedClaims
-            .slice(0, Math.min(3, verifiedClaims.length))
-            .map((claim: any) => claim.statement)
-        : fallback.mustCover;
-    const coverage = mustCover.map((requirement: string, index: number) => ({
-      requirement,
-      supported: verifiedClaims.length >= 2 && index < verifiedClaims.length,
-      claimIds:
-        verifiedClaims.length >= 2 && index < verifiedClaims.length
-          ? [String(verifiedClaims[index].id)]
+  const angles = Array.from(
+    { length: settings.articlesPerKeyword },
+    (_, index) => {
+      const template = templates[index % templates.length];
+      const cycle = Math.floor(index / templates.length);
+      return {
+        titleIdea: `${keyword}: ${template.suffix}${cycle ? ` ${cycle + 1}` : ""}`,
+        purpose: template.purpose,
+        searchQuestion: template.question,
+        readerSituation: template.situation,
+        answerPromise: template.promise,
+        mustCover: template.mustCover,
+        evidenceCoverage: template.mustCover.map((requirement) => ({
+          requirement,
+          supported: false,
+          claimIds: [],
+          gap: "글 작성 단계에서 웹 검색으로 재확인",
+        })),
+        exclusions: [
+          "확인되지 않은 단정",
+          "루머·추측",
+          "출처 없이 제시하는 정확한 수치·날짜",
+        ],
+        uniqueValue: template.value,
+        contentMode: realtime ? "realtime" : "evergreen",
+        freshnessWindowHours: realtime
+          ? Number(input.keyword?.freshnessWindowHours || 24)
+          : undefined,
+        eventDate: input.keyword?.eventDate,
+        sourceCheckedAt: input.keyword?.sourceCheckedAt,
+        planningEvidence: Array.isArray(input.keyword?.evidence)
+          ? input.keyword.evidence.slice(0, 6)
           : [],
-      gap:
-        verifiedClaims.length >= 2 && index < verifiedClaims.length
-          ? "없음"
-          : "글 작성 단계에서 근거 재확인",
-    }));
-    angles.push({
-      titleIdea,
-      purpose: fallback.purpose,
-      searchQuestion: fallback.question,
-      readerSituation: fallback.situation,
-      answerPromise: fallback.promise,
-      mustCover,
-      evidenceCoverage: coverage,
-      exclusions: ["공식 근거로 확인되지 않은 추측과 개인 경험 일반화"],
-      uniqueValue: fallback.value,
-      ...(verifiedClaims.length >= 2
-        ? {
-            prevalidatedDossier: {
-              checkedAt:
-                input.keyword.sourceCheckedAt || new Date().toISOString(),
-              readerNeed: fallback.question,
-              directAnswer: String(input.keyword.directAnswer || "").trim(),
-              scope: `${input.category.name} · ${input.keyword.keyword}`,
-              claims: verifiedClaims,
-              conflicts: [],
-              unknowns: [],
-              coverage,
-              practicalSteps: Array.isArray(input.keyword.practicalSteps)
-                ? input.keyword.practicalSteps
-                : [],
-              uniqueValuePlan: Array.isArray(input.keyword.uniqueValuePlan)
-                ? input.keyword.uniqueValuePlan
-                : [fallback.value],
-            },
-            prevalidatedSources: input.keyword.verifiedSources || [],
-          }
-        : {}),
-    });
-  }
-  return {
-    angles: angles.slice(0, settings.articlesPerKeyword),
-    adjusted: candidates.length !== settings.articlesPerKeyword,
-  };
+        categoryEvidence: Array.isArray(input.category?.evidence)
+          ? input.category.evidence.slice(0, 4)
+          : [],
+      };
+    },
+  );
+
+  return { angles, adjusted: false };
 }
 
 export function finalizeStagedPlan(draft: any, settings: PlanningSettings) {
