@@ -3,8 +3,8 @@ import { readFileSync } from "node:fs";
 import { productionResilienceTestHooks } from "../lib/production";
 
 const paragraph =
-  "공식 자료를 기준으로 적용 조건과 확인 시점을 구분하고, 실제 이용 전에는 운영기관의 최신 안내를 다시 확인해야 합니다. ".repeat(
-    4,
+  "공식 자료를 기준으로 적용 조건과 확인 시점을 구분하고, 실제 이용 전에는 운영기관의 최신 안내를 다시 확인해야 합니다. 조건과 예외, 확인 절차를 함께 살펴야 실제 적용 여부를 판단할 수 있습니다. ".repeat(
+    8,
   );
 const html = `<p>${paragraph}</p><h2>신청 전에 확인할 조건</h2><p>${paragraph}</p><p>${paragraph}</p><h2>실행 순서와 예외</h2><p>${paragraph}</p>`;
 const draft: any = {
