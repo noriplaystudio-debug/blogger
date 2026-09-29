@@ -49,6 +49,7 @@ async function queueNext(req: NextRequest, runKey: string) {
 
 export async function POST(req: NextRequest) {
   let automationRunId: number | undefined;
+  let activeRunKey = "";
   try {
     assertCron(req);
     if (!hasDatabase()) throw new Error("DATABASE_URL이 없습니다.");
@@ -56,6 +57,7 @@ export async function POST(req: NextRequest) {
       throw new Error("OPENAI_API_KEY가 없습니다.");
 
     const runKey = String(req.nextUrl.searchParams.get("runKey") || "").slice(0, 120);
+    activeRunKey = runKey;
     if (!runKey) throw new Error("runKey가 없습니다.");
 
     const progress = await getWeeklyPlanningProgress(runKey);
@@ -206,6 +208,19 @@ export async function POST(req: NextRequest) {
       await finishRun(automationRunId, "failed", {
         error: error?.message || "manual weekly worker failed",
       }).catch(() => {});
+    if (activeRunKey) {
+      const progress = await getWeeklyPlanningProgress(activeRunKey).catch(() => null);
+      if (progress)
+        await saveWeeklyPlanningProgress({
+          runKey: activeRunKey,
+          weekStart: progress.weekStart,
+          mode: "manual",
+          settings: progress.settings,
+          draft: progress.draft,
+          sources: progress.sources || [],
+          status: "failed",
+        }).catch(() => {});
+    }
     return NextResponse.json(
       { error: error?.message || "주간 계획 백그라운드 실행 실패" },
       { status: 500 },
