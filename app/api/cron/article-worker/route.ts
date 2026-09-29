@@ -213,6 +213,7 @@ export async function POST(req: NextRequest) {
       postId: published?.id || post.id,
     });
   } catch (error: any) {
+    shouldTopUp = false;
     const sourceBlocked = isSourceBlockedError(error);
     const systemic = !sourceBlocked && isSystemicProviderError(error);
     if (jobId) {
