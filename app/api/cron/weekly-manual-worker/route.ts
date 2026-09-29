@@ -99,6 +99,8 @@ export async function POST(req: NextRequest) {
         draft,
         sources,
         status: "running",
+        error: null,
+        failures: 0,
       });
       await finishRun(automationRunId, "success", { runKey, phase: "categories" });
       await queueNext(req, runKey);
@@ -126,6 +128,8 @@ export async function POST(req: NextRequest) {
         draft,
         sources,
         status: "running",
+        error: null,
+        failures: 0,
       });
       await finishRun(automationRunId, "success", {
         runKey,
@@ -165,6 +169,8 @@ export async function POST(req: NextRequest) {
         draft,
         sources,
         status: "running",
+        error: null,
+        failures: 0,
       });
       await finishRun(automationRunId, "success", {
         runKey,
@@ -190,6 +196,8 @@ export async function POST(req: NextRequest) {
       draft,
       sources,
       status: "ready",
+      error: null,
+      failures: 0,
     });
     await finishRun(automationRunId, "success", {
       runKey,
@@ -210,7 +218,9 @@ export async function POST(req: NextRequest) {
       }).catch(() => {});
     if (activeRunKey) {
       const progress = await getWeeklyPlanningProgress(activeRunKey).catch(() => null);
-      if (progress)
+      if (progress) {
+        const failures = Number(progress.failures || 0) + 1;
+        const retrying = failures < 4;
         await saveWeeklyPlanningProgress({
           runKey: activeRunKey,
           weekStart: progress.weekStart,
@@ -218,11 +228,18 @@ export async function POST(req: NextRequest) {
           settings: progress.settings,
           draft: progress.draft,
           sources: progress.sources || [],
-          status: "failed",
+          status: retrying ? "running" : "failed",
+          error: error?.message || "주간 계획 백그라운드 실행 실패",
+          failures,
         }).catch(() => {});
+        if (retrying) await queueNext(req, activeRunKey).catch(() => {});
+      }
     }
     return NextResponse.json(
-      { error: error?.message || "주간 계획 백그라운드 실행 실패" },
+      {
+        error: error?.message || "주간 계획 백그라운드 실행 실패",
+        retryScheduled: Boolean(activeRunKey),
+      },
       { status: 500 },
     );
   }
