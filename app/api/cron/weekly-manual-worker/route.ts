@@ -107,12 +107,64 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, queued: true, phase: "categories" });
     }
 
-    const completedCategoryCount = (draft.categories || []).filter(
+    let completedCategoryCount = (draft.categories || []).filter(
       (category: any) =>
         !category?.planningSkipped &&
         Array.isArray(category.keywords) &&
         category.keywords.length > 0,
     ).length;
+
+    const activeCandidateCount = (draft.categories || []).filter(
+      (category: any) => !category?.planningSkipped,
+    ).length;
+    if (
+      completedCategoryCount < Number(settings.categoryCount) &&
+      activeCandidateCount < Number(settings.categoryCount)
+    ) {
+      const [performanceGuidance, strategyGuidance] = await Promise.all([
+        getPortfolioPerformanceGuidance(),
+        getStrategyGuidance(),
+      ]);
+      const categoryResult = await createCategoryStage(process.env.OPENAI_API_KEY, {
+        categoryPortfolio: (draft.categories || []).map(
+          (category: any) => category.name,
+        ),
+        recentKeywords,
+        recentContent,
+        settings,
+        performanceGuidance,
+        strategyGuidance,
+      });
+      const existingNames = new Set(
+        (draft.categories || []).map((category: any) =>
+          String(category?.name || "").trim().toLowerCase(),
+        ),
+      );
+      for (const category of categoryResult.draft?.categories || []) {
+        const key = String(category?.name || "").trim().toLowerCase();
+        if (!key || existingNames.has(key)) continue;
+        existingNames.add(key);
+        draft.categories.push(category);
+      }
+      sources = mergeSources(sources, categoryResult.sources || []);
+      await saveWeeklyPlanningProgress({
+        runKey,
+        weekStart: progress.weekStart,
+        mode: "manual",
+        settings,
+        draft,
+        sources,
+        status: "running",
+        error: null,
+        failures: 0,
+      });
+      completedCategoryCount = (draft.categories || []).filter(
+        (category: any) =>
+          !category?.planningSkipped &&
+          Array.isArray(category.keywords) &&
+          category.keywords.length > 0,
+      ).length;
+    }
     if (completedCategoryCount >= Number(settings.categoryCount)) {
       for (const category of draft.categories || []) {
         if (
