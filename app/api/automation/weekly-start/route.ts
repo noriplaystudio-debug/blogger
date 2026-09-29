@@ -31,20 +31,7 @@ export async function POST(req: Request) {
       ),
     };
     await saveAutomationConfig(settings);
-    const runKey = `manual:${randomUUID()}`;
     const weekStart = mondayOfKoreaWeek();
-    const reservation = await reserveEstimatedCost({
-      jobId: `manual-weekly-plan:${runKey}`,
-      kind: "weekly-plan",
-      amountWon: current.estimatedWeeklyPlanCostWon,
-      detail: { basis: "user-configured-estimate", mode: "manual-background" },
-    });
-    if (!reservation.allowed)
-      return NextResponse.json(
-        { error: "월 AI 예산 한도로 주간 조사를 시작하지 않았습니다." },
-        { status: 429 },
-      );
-
     const currentWeek = await getCurrentWeekPlan();
     const existingPlan = currentWeek?.plan;
     const existingCategories = Array.isArray(existingPlan?.categories)
@@ -72,6 +59,32 @@ export async function POST(req: Request) {
     const canResumeExisting =
       existingCategories.length > 0 &&
       existingArticleCapacity < weeklyArticleTarget;
+
+    if (
+      existingCategories.length >= settings.categoryCount &&
+      existingArticleCapacity >= weeklyArticleTarget
+    )
+      return NextResponse.json({
+        ok: true,
+        status: "ready",
+        alreadyComplete: true,
+        existingCategoryCount: existingCategories.length,
+        existingArticleCapacity,
+        weeklyArticleTarget,
+      });
+
+    const runKey = `manual:${randomUUID()}`;
+    const reservation = await reserveEstimatedCost({
+      jobId: `manual-weekly-plan:${runKey}`,
+      kind: "weekly-plan",
+      amountWon: current.estimatedWeeklyPlanCostWon,
+      detail: { basis: "user-configured-estimate", mode: "manual-background" },
+    });
+    if (!reservation.allowed)
+      return NextResponse.json(
+        { error: "월 AI 예산 한도로 주간 조사를 시작하지 않았습니다." },
+        { status: 429 },
+      );
 
     await saveWeeklyPlanningProgress({
       runKey,
