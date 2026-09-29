@@ -244,30 +244,29 @@ function determineEvidencePolicy(body: any): EvidencePolicy {
     .filter(Boolean)
     .join(" ");
   const strict =
-    body?.angle?.contentMode === "realtime" ||
-    /의료|건강|질병|의약|약품|약물|복약|법률|법령|세금|금융|투자|보험|대출|지원금|장학금|정부|정책|공공서비스|교통|KTX|SRT|항공|사건|사고|재난|스포츠|연예|선거|채용|입시/i.test(
+    /의료|건강|질병|의약|약품|약물|복약|법률|법령|세금|금융|투자|보험|대출|지원금|정부정책|선거|투표|재난|응급|안전사고/i.test(
       topic,
     );
   return strict
     ? {
         level: "strict",
-        label: "고위험·시의성 엄격 검증",
+        label: "고위험 정보 강화 검증",
         primaryRequired: false,
         minimumDomains: 2,
-        minimumClaims: 3,
-        minimumSupportedRequirements: 3,
-        reason:
-          "바뀔 수 있거나 잘못 안내했을 때 독자에게 피해가 생길 수 있어 출처 수와 핵심 근거 수만 한 단계 높입니다.",
-      }
-    : {
-        level: "standard",
-        label: "일반 정보형 표준 검증",
-        primaryRequired: false,
-        minimumDomains: 1,
         minimumClaims: 2,
         minimumSupportedRequirements: 2,
         reason:
-          "일반 정보형 주제로 독립 출처 교차확인은 유지하되 1차 출처가 존재하지 않는다는 이유만으로 중단하지 않습니다.",
+          "건강·법률·금융·선거·안전처럼 잘못된 정보의 피해가 큰 주제만 강화 검증합니다.",
+      }
+    : {
+        level: "standard",
+        label: "개인 블로그 실용 검증",
+        primaryRequired: false,
+        minimumDomains: 1,
+        minimumClaims: 1,
+        minimumSupportedRequirements: 1,
+        reason:
+          "일반 블로그 글은 핵심 주장에 확인 가능한 출처가 있으면 진행하고, 세부 표현은 과도하게 차단하지 않습니다.",
       };
 }
 
@@ -348,10 +347,10 @@ function classifyRecoveryDecision(input: {
     ...(input.evidenceAudit?.freshnessIssues || []),
   ];
   const evidenceFailed =
-    Number(input.review.factualScore || 0) < 95 ||
-    Number(input.review.evidenceScore || 0) < 95 ||
+    Number(input.review.factualScore || 0) < 80 ||
+    Number(input.review.evidenceScore || 0) < 80 ||
     input.evidenceAudit?.passed === false ||
-    evidenceReasons.length > 0;
+    input.evidenceAudit?.misleadingClaims?.length > 0;
 
   if (
     evidenceFailed &&
@@ -555,7 +554,11 @@ function validateResearchDossier(
   return value;
 }
 
-function validateEvidenceAudit(value: EvidenceAudit) {
+function validateEvidenceAudit(
+  value: EvidenceAudit,
+  policy: EvidencePolicy,
+  contentMode: "evergreen" | "realtime" = "evergreen",
+) {
   if (
     !value ||
     !Number.isFinite(Number(value.evidenceScore)) ||
@@ -574,13 +577,21 @@ function validateEvidenceAudit(value: EvidenceAudit) {
   value.checkedSources = Array.isArray(value.checkedSources)
     ? value.checkedSources.filter((source) => urlKey(source?.url || ""))
     : [];
+
+  const strict = policy.level === "strict";
+  const minimumScore = strict ? 90 : 80;
+  const minimumSources = strict ? 2 : 1;
+  const unsupportedLimit = strict ? 0 : 1;
+  const freshnessBlocks =
+    contentMode === "realtime" ? value.freshnessIssues.length > 0 : false;
+
   value.passed = Boolean(
     value.passed &&
-    value.evidenceScore >= 95 &&
-    !value.unsupportedClaims.length &&
+    value.evidenceScore >= minimumScore &&
+    value.unsupportedClaims.length <= unsupportedLimit &&
     !value.misleadingClaims.length &&
-    !value.freshnessIssues.length &&
-    value.checkedSources.length >= 2,
+    !freshnessBlocks &&
+    value.checkedSources.length >= minimumSources,
   );
   return value;
 }
@@ -593,6 +604,7 @@ async function auditFinalEvidence(
     angle: any;
     html: string;
     dossier: ResearchDossier | null;
+    policy: EvidencePolicy;
   },
 ) {
   let lastAudit: EvidenceAudit | null = null;
@@ -604,10 +616,12 @@ async function auditFinalEvidence(
       tools: [{ type: "web_search" }],
       include: ["web_search_call.action.sources" as any],
       reasoning: { effort: "medium" },
-      input: `당신은 최종 발행 직전의 독립 근거 감사자다. 최초 조사자의 결론을 그대로 믿지 말고 실제 원문을 다시 열어 원고의 핵심 사실·수치·날짜·조건·예외를 확인한다. 검색결과 요약만 보고 통과시키지 않는다. 의견·일반적 조언과 검증 가능한 사실을 구분한다. 출처가 있어도 원고가 조건을 빼거나 더 강하게 표현했다면 misleadingClaims에 기록한다. 현재성이 필요한 정보가 낡았거나 날짜를 확인할 수 없으면 freshnessIssues에 기록한다. 사소한 문체 문제는 판단하지 않는다. 반드시 서로 다른 도메인의 원문 2곳 이상을 직접 확인한다.${attempt ? `\n이전 감사가 통과하지 못한 이유: ${previousFailure}\n이번에는 빠진 주장과 두 번째 독립 출처를 우선 확인한다.` : ""}\n\n카테고리: ${input.category}\n키워드: ${input.keyword}\n글 브리프: ${JSON.stringify(input.angle)}\n최초 조사 문서: ${JSON.stringify(input.dossier)}\n최종 원고 HTML: ${input.html}\n\nJSON만 출력한다: {"passed":true,"evidenceScore":0,"unsupportedClaims":["출처로 확인되지 않는 원고 주장"],"misleadingClaims":["조건·범위를 왜곡한 주장"],"freshnessIssues":["현재성 문제"],"notes":["감사 메모"],"checkedSources":[{"title":"직접 연 출처명","url":"https://..."}]}`,
+      input: `당신은 최종 발행 직전의 독립 근거 감사자다. 최초 조사자의 결론을 그대로 믿지 말고 실제 원문을 다시 열어 원고의 핵심 사실·수치·날짜·조건·예외를 확인한다. 검색결과 요약만 보고 통과시키지 않는다. 의견·일반적 조언과 검증 가능한 사실을 구분한다. 출처가 있어도 원고가 조건을 빼거나 더 강하게 표현했다면 misleadingClaims에 기록한다. 현재성이 필요한 정보가 낡았거나 날짜를 확인할 수 없으면 freshnessIssues에 기록한다. 사소한 문체 문제는 판단하지 않는다. 일반 블로그 글은 핵심 사실을 뒷받침하는 확인 가능한 원문 1곳 이상이면 충분하며, 가능하면 추가 출처를 확인한다. 건강·법률·금융·선거·안전 등 강화 검증 주제에서만 독립 출처 2곳을 우선 요구한다.${attempt ? `\n이전 감사가 통과하지 못한 이유: ${previousFailure}\n이번에는 빠진 주장과 두 번째 독립 출처를 우선 확인한다.` : ""}\n\n카테고리: ${input.category}\n키워드: ${input.keyword}\n글 브리프: ${JSON.stringify(input.angle)}\n최초 조사 문서: ${JSON.stringify(input.dossier)}\n최종 원고 HTML: ${input.html}\n\nJSON만 출력한다: {"passed":true,"evidenceScore":0,"unsupportedClaims":["출처로 확인되지 않는 원고 주장"],"misleadingClaims":["조건·범위를 왜곡한 주장"],"freshnessIssues":["현재성 문제"],"notes":["감사 메모"],"checkedSources":[{"title":"직접 연 출처명","url":"https://..."}]}`,
     });
     const audit = validateEvidenceAudit(
       parseJson<EvidenceAudit>(response.output_text),
+      input.policy,
+      input.angle?.contentMode === "realtime" ? "realtime" : "evergreen",
     );
     const searchedKeys = new Set(
       extractCitations(response).map((source) => urlKey(source.url)),
@@ -620,14 +634,19 @@ async function auditFinalEvidence(
         new URL(source.url).hostname.replace(/^www\./, ""),
       ),
     );
-    audit.passed = Boolean(audit.passed && checkedDomains.size >= 2);
+    audit.passed = Boolean(
+      audit.passed &&
+        checkedDomains.size >= (input.policy.level === "strict" ? 2 : 1),
+    );
     lastAudit = audit;
     if (audit.passed) return audit;
     previousFailure = [
       ...audit.unsupportedClaims,
       ...audit.misleadingClaims,
       ...audit.freshnessIssues,
-      ...(checkedDomains.size < 2 ? ["독립 출처 도메인이 2개 미만"] : []),
+      ...(checkedDomains.size < (input.policy.level === "strict" ? 2 : 1)
+        ? ["필요한 출처 수를 확보하지 못함"]
+        : []),
     ].join("; ");
   }
   return lastAudit!;
@@ -1304,27 +1323,31 @@ export async function produceArticle(
       const citedSourceCount = [...sourceHosts].filter((host) =>
         citedHosts.has(host),
       ).length;
-      const minimumCitations = Math.min(2, sourceHosts.size);
+      const strictEvidence = evidencePolicy.level === "strict";
+      const minimumCitations = Math.min(
+        strictEvidence ? 2 : 1,
+        sourceHosts.size,
+      );
       if (citedSourceCount < minimumCitations)
         review.issues.push(
           `본문에 조사 출처 링크가 부족합니다(${citedSourceCount}/${minimumCitations}).`,
         );
       review.passed = Boolean(
         review.passed &&
-        review.overallScore >= 88 &&
-        review.factualScore >= 95 &&
-        review.evidenceScore >= 95 &&
-        review.usefulnessScore >= 88 &&
-        review.intentScore >= 90 &&
-        review.originalValueScore >= 85 &&
-        review.readabilityScore >= 85 &&
-        review.titleAccuracyScore >= 90 &&
-        review.completenessScore >= 90 &&
-        review.titleAssessment.queryMatch >= 90 &&
-        review.titleAssessment.specificity >= 85 &&
-        review.titleAssessment.accuracy >= 95 &&
-        review.titleAssessment.distinctiveness >= 85 &&
-        review.titleAssessment.concision >= 85 &&
+        review.overallScore >= (strictEvidence ? 88 : 82) &&
+        review.factualScore >= (strictEvidence ? 90 : 82) &&
+        review.evidenceScore >= (strictEvidence ? 90 : 80) &&
+        review.usefulnessScore >= 80 &&
+        review.intentScore >= 82 &&
+        review.originalValueScore >= 75 &&
+        review.readabilityScore >= 75 &&
+        review.titleAccuracyScore >= (strictEvidence ? 90 : 82) &&
+        review.completenessScore >= 82 &&
+        review.titleAssessment.queryMatch >= 82 &&
+        review.titleAssessment.specificity >= 75 &&
+        review.titleAssessment.accuracy >= (strictEvidence ? 92 : 85) &&
+        review.titleAssessment.distinctiveness >= 75 &&
+        review.titleAssessment.concision >= 75 &&
         finalDiagnostics.passed &&
         citedSourceCount >= minimumCitations,
       );
@@ -1363,6 +1386,7 @@ export async function produceArticle(
               angle: body.angle,
               html: review.correctedHtml,
               dossier: researchDossier,
+              policy: evidencePolicy,
             });
         if (!evidenceAudit.passed) {
           review.issues.push(
