@@ -109,6 +109,13 @@ export async function GET() {
       },
       {},
     );
+    const recentWorkerErrors = workerRuns
+      .filter((run: any) => run.status === "failed" && run.detail?.error)
+      .slice(0, 10)
+      .map((run: any) => ({
+        error: String(run.detail.error).slice(0, 300),
+        systemic: Boolean(run.detail.systemic),
+      }));
 
     const nowKst = koreaDateTimeParts();
 
@@ -132,6 +139,7 @@ export async function GET() {
           deficit: Math.max(0, weeklyTarget - planArticleCapacity),
         },
         recentArticleWorkers: workerSummary,
+        recentWorkerErrors,
         latestDailyRun: latestDaily
           ? {
               status: latestDaily.status,
