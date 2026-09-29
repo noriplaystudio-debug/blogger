@@ -118,7 +118,7 @@ export async function createBloggerDraft(
         blogId,
         status: ["draft", "live"],
         fetchBodies: true,
-        maxResults: 500,
+        maxResults: 100,
         fields: "items(id,url,title,content,status)",
       });
       const matched = (existing.items || []).find((post) =>
