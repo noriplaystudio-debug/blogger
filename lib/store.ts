@@ -849,7 +849,7 @@ export async function finishRun(id: number, status: string, detail: any) {
 
 export async function recentRuns() {
   await ensureSchema();
-  return db()`SELECT kind, status, detail, started_at, finished_at FROM automation_runs ORDER BY id DESC LIMIT 10`;
+  return db()`SELECT kind, status, detail, started_at, finished_at FROM automation_runs ORDER BY id DESC LIMIT 50`;
 }
 
 export async function recordAuditEvent(input: {
