@@ -43,7 +43,7 @@
     },
     {
       "path": "/api/cron/daily-retry-4",
-      "schedule": "0 9 * * *"
+      "schedule": "50 8 * * *"
     }
   ]
 }
