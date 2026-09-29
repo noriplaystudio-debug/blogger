@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { assertCron, serverKeys } from "@/lib/cron";
 import {
   createBloggerDraft,
@@ -26,8 +26,22 @@ import {
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
+function queueDailyTopUp(req: NextRequest) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return;
+  const origin = new URL(req.url).origin;
+  after(async () => {
+    await fetch(`${origin}/api/cron/daily`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${secret}` },
+      cache: "no-store",
+    }).catch(() => {});
+  });
+}
+
 export async function POST(req: NextRequest) {
   let runId: number | undefined;
+  let shouldTopUp = false;
   const jobId = String(req.nextUrl.searchParams.get("jobId") || "").slice(0, 220);
   try {
     assertCron(req);
@@ -56,6 +70,7 @@ export async function POST(req: NextRequest) {
         state: job.state,
       });
 
+    shouldTopUp = true;
     runId = await startRun("article-worker");
     const config = await getAutomationConfig();
     const suppliedBlogId = String(
@@ -221,5 +236,7 @@ export async function POST(req: NextRequest) {
       },
       { status: systemic ? 503 : 500 },
     );
+  } finally {
+    if (shouldTopUp) queueDailyTopUp(req);
   }
 }
