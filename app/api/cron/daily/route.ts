@@ -132,7 +132,7 @@ export async function GET(req: NextRequest) {
     // 품질 재시도·출처 보강 실패가 일부 슬롯을 소모하지 않도록 충분한
     // 후보를 미리 확보한다. 인증·쿼터 같은 공통 장애만 즉시 중지한다.
     const jobs = await claimDueJobs(
-      Math.min(50, Math.max(config.dailyArticleLimit * 3, config.dailyArticleLimit + 5)),
+      Math.min(50, Math.max(config.dailyArticleLimit * 4, config.dailyArticleLimit + 8)),
     );
     const results: any[] = [...draftResults];
     let consecutiveErrors = 0;
@@ -192,8 +192,8 @@ export async function GET(req: NextRequest) {
           ? savedArticle.recoveryDecision?.mode ||
             (Number(savedArticle.review?.overallScore || 0) === 0
               ? "review_only"
-              : Number(savedArticle.review?.factualScore || 0) < 95 ||
-                  Number(savedArticle.review?.evidenceScore || 0) < 95
+              : Number(savedArticle.review?.factualScore || 0) < 80 ||
+                  Number(savedArticle.review?.evidenceScore || 0) < 80
                 ? "evidence_repair"
                 : "content_repair")
           : null;
@@ -257,6 +257,7 @@ export async function GET(req: NextRequest) {
             state: finalState,
             postId: published?.id || post.id,
           });
+          completedSlots += 1;
         } else {
           await updateJob(job.id, {
             state: article.status,
@@ -270,7 +271,6 @@ export async function GET(req: NextRequest) {
             bloggerMapped: true,
           });
         }
-        completedSlots += 1;
         consecutiveErrors = 0;
       } catch (error: any) {
         const sourceBlocked = isSourceBlockedError(error);
@@ -310,6 +310,7 @@ export async function GET(req: NextRequest) {
       ).length,
       syncedDrafts: draftResults.filter((item) => item.state === "draft")
         .length,
+      successful: completedSlots,
       deferred: results.reduce(
         (sum, item) => sum + Number(item.deferred || 0),
         0,
