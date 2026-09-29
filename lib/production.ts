@@ -350,7 +350,7 @@ function classifyRecoveryDecision(input: {
     Number(input.review.factualScore || 0) < 80 ||
     Number(input.review.evidenceScore || 0) < 80 ||
     input.evidenceAudit?.passed === false ||
-    input.evidenceAudit?.misleadingClaims?.length > 0;
+    Number(input.evidenceAudit?.misleadingClaims?.length || 0) > 0;
 
   if (
     evidenceFailed &&
