@@ -53,7 +53,7 @@ export async function generateWithModel(args: {
   const maxTokens = args.maxTokens || 7000;
 
   if (provider === "openai") {
-    const client = new OpenAI({ apiKey });
+    const client = new OpenAI({ apiKey, timeout: 90000, maxRetries: 1 });
     const response = await client.responses.create({
       model: args.model,
       instructions: args.system,
@@ -78,7 +78,7 @@ export async function generateWithModel(args: {
   }
 
   if (provider === "anthropic") {
-    const client = new Anthropic({ apiKey });
+    const client = new Anthropic({ apiKey, timeout: 90000, maxRetries: 1 });
     const response = await client.messages.create({
       model: args.model,
       max_tokens: maxTokens,
