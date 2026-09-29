@@ -132,29 +132,19 @@ export async function GET(req: NextRequest) {
     // 품질 재시도·출처 보강 실패가 일부 슬롯을 소모하지 않도록 충분한
     // 후보를 미리 확보한다. 인증·쿼터 같은 공통 장애만 즉시 중지한다.
     const jobs = await claimDueJobs(
-      Math.min(50, Math.max(config.dailyArticleLimit * 4, config.dailyArticleLimit + 8)),
+      Math.min(28, Math.max(config.dailyArticleLimit * 2, config.dailyArticleLimit + 4)),
     );
     const results: any[] = [...draftResults];
-    let consecutiveErrors = 0;
     let completedSlots = 0;
-    for (let index = 0; index < jobs.length; index += 1) {
-      if (completedSlots >= config.dailyArticleLimit) {
-        const replacementReserveIds = jobs.slice(index).map((item) => item.id);
-        await releaseJobClaims(
-          replacementReserveIds,
-          "오늘 작성량을 채워 대체 후보를 다음 실행으로 이월했습니다.",
-        );
-        results.push({
-          state: "replacement_reserve_released",
-          deferred: replacementReserveIds.length,
-        });
-        break;
-      }
-      const job = jobs[index];
+    let systemicFailure = false;
+
+    const processJob = async (job: any) => {
       try {
         const targetBlogId = await resolveTargetBlogId(job);
-        const existingArticles = await getRecentArticles(40, targetBlogId);
-        const performanceGuidance = await getPerformanceGuidance(targetBlogId);
+        const [existingArticles, performanceGuidance] = await Promise.all([
+          getRecentArticles(40, targetBlogId),
+          getPerformanceGuidance(targetBlogId),
+        ]);
         const reservation = await reserveEstimatedCost({
           jobId: job.id,
           blogId: targetBlogId,
@@ -174,19 +164,9 @@ export async function GET(req: NextRequest) {
             reviewerModel: config.reviewerModel,
           },
         });
-        if (!reservation.allowed) {
-          const pendingIds = jobs.slice(index).map((item) => item.id);
-          await releaseJobClaims(
-            pendingIds,
-            "월 AI 예산 한도에 도달해 다음 실행으로 이월했습니다.",
-          );
-          results.push({
-            state: "budget_paused",
-            deferred: pendingIds.length,
-            budget: reservation,
-          });
-          break;
-        }
+        if (!reservation.allowed)
+          return { id: job.id, state: "budget_paused", budget: reservation };
+
         const savedArticle = job.article || null;
         const inferredRecoveryMode = savedArticle
           ? savedArticle.recoveryDecision?.mode ||
@@ -219,90 +199,107 @@ export async function GET(req: NextRequest) {
             performanceGuidance,
           },
         );
-        if (article.status === "ready") {
-          const post = await createBloggerDraft(targetBlogId, article, job.id);
-          const published = config.autoPublish
-            ? post.published
-              ? post
-              : await publishBloggerDraft(targetBlogId, post.id!)
-            : null;
-          const finalState = published ? "published" : "draft";
-          await updateJob(job.id, {
-            state: finalState,
-            article,
-            bloggerPostId: published?.id || post.id,
-            blogId: targetBlogId,
-          });
-          await recordAuditEvent({
-            action: published
-              ? published.reused
-                ? "published_reused"
-                : "post_published"
-              : post.reused
-                ? "draft_reused"
-                : "draft_created",
-            entityType: "article_job",
-            entityId: job.id,
-            detail: {
-              blogId: targetBlogId,
-              postId: published?.id || post.id,
-              title: article.title,
-              mode: config.autoPublish
-                ? "automatic-publish"
-                : "automatic-draft",
-            },
-          });
-          results.push({
-            id: job.id,
-            state: finalState,
-            postId: published?.id || post.id,
-          });
-          completedSlots += 1;
-        } else {
+
+        if (article.status !== "ready") {
           await updateJob(job.id, {
             state: article.status,
             article,
             blogId: targetBlogId,
             error: null,
           });
-          results.push({
+          return {
             id: job.id,
             state: article.status,
             bloggerMapped: true,
-          });
+          };
         }
-        consecutiveErrors = 0;
+
+        const post = await createBloggerDraft(targetBlogId, article, job.id);
+        const published = config.autoPublish
+          ? post.published
+            ? post
+            : await publishBloggerDraft(targetBlogId, post.id!)
+          : null;
+        const finalState = published ? "published" : "draft";
+        await updateJob(job.id, {
+          state: finalState,
+          article,
+          bloggerPostId: published?.id || post.id,
+          blogId: targetBlogId,
+        });
+        await recordAuditEvent({
+          action: published
+            ? published.reused
+              ? "published_reused"
+              : "post_published"
+            : post.reused
+              ? "draft_reused"
+              : "draft_created",
+          entityType: "article_job",
+          entityId: job.id,
+          detail: {
+            blogId: targetBlogId,
+            postId: published?.id || post.id,
+            title: article.title,
+            mode: config.autoPublish
+              ? "automatic-publish"
+              : "automatic-draft",
+          },
+        });
+        return {
+          id: job.id,
+          state: finalState,
+          postId: published?.id || post.id,
+          success: true,
+        };
       } catch (error: any) {
         const sourceBlocked = isSourceBlockedError(error);
         await updateJob(job.id, {
           state: sourceBlocked ? "source_blocked" : "error",
           error: error.message || "자동 작성 실패",
         });
-        results.push({
+        return {
           id: job.id,
           state: sourceBlocked ? "source_blocked" : "error",
           error: error.message,
-        });
-        if (sourceBlocked) {
-          consecutiveErrors = 0;
-          continue;
-        }
-        consecutiveErrors += 1;
-        if (isSystemicProviderError(error)) {
-          const deferredIds = jobs.slice(index + 1).map((item) => item.id);
-          await releaseJobClaims(
-            deferredIds,
-            "연속 오류 2회로 비용 낭비를 막기 위해 다음 실행으로 이월했습니다.",
-          );
-          results.push({
-            state: "circuit_breaker",
-            deferred: deferredIds.length,
-            reason: "shared provider authentication, quota, or billing error",
-          });
-          break;
-        }
+          systemic: !sourceBlocked && isSystemicProviderError(error),
+        };
       }
+    };
+
+    // Run a small concurrent wave so seven articles do not serialize into the
+    // 300-second Vercel limit. Only launch as many jobs as are still needed.
+    let cursor = 0;
+    while (
+      completedSlots < config.dailyArticleLimit &&
+      cursor < jobs.length &&
+      !systemicFailure
+    ) {
+      const needed = config.dailyArticleLimit - completedSlots;
+      const waveSize = Math.min(3, needed, jobs.length - cursor);
+      const wave = jobs.slice(cursor, cursor + waveSize);
+      cursor += waveSize;
+      const waveResults = await Promise.all(wave.map(processJob));
+      results.push(...waveResults);
+      completedSlots += waveResults.filter((item) => item.success).length;
+      systemicFailure = waveResults.some((item) => item.systemic);
+      if (waveResults.some((item) => item.state === "budget_paused")) break;
     }
+
+    if (cursor < jobs.length) {
+      const deferredIds = jobs.slice(cursor).map((item) => item.id);
+      await releaseJobClaims(
+        deferredIds,
+        systemicFailure
+          ? "공통 API 인증·쿼터 오류로 다음 실행으로 이월했습니다."
+          : "오늘 성공 발행 목표 또는 실행 한도에 도달해 다음 실행으로 이월했습니다.",
+      );
+      results.push({
+        state: systemicFailure ? "circuit_breaker" : "replacement_reserve_released",
+        deferred: deferredIds.length,
+      });
+    }
+
     const detail = {
       requested: config.dailyArticleLimit,
       processed: results.filter(
