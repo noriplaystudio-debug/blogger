@@ -1161,7 +1161,7 @@ export default function Home() {
           setBusy(
             progress.status === "ready"
               ? "주간 계획 저장 완료"
-              : `주간 계획 생성 중 · 카테고리 ${progress.categoryCount} · 키워드 ${progress.keywordCount} · 글 방향 ${progress.completedAngles}/${progress.expectedAngles}${progress.failures ? ` · 자동 재시도 ${progress.failures}회` : ""}`,
+              : `주간 계획 생성 중 · 카테고리 ${progress.categoryCount}/${progress.targetCategoryCount || workflow.categoryCount} · 키워드 ${progress.keywordCount}/${progress.targetKeywordCount || workflow.categoryCount * workflow.keywordsPerCategory} · 글 방향 ${progress.completedAngles}/${progress.expectedAngles}${progress.skippedCategories ? ` · 교체 후보 ${progress.skippedCategories}개` : ""}${progress.failures ? ` · 자동 재시도 ${progress.failures}회` : ""}`,
           );
 
           if (progress.status === "failed")
