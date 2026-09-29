@@ -39,7 +39,10 @@ export async function GET(req: NextRequest) {
           (keyword: any) =>
             !keyword?.planningSkipped &&
             Array.isArray(keyword.angles) &&
-            keyword.angles.length === Number(progress.settings?.articlesPerKeyword),
+            keyword.angles.length === Number(
+              keyword.articleCountOverride ||
+                progress.settings?.articlesPerKeyword,
+            ),
         ).length,
       0,
     );
