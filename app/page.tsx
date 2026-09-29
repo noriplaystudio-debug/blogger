@@ -1133,27 +1133,46 @@ export default function Home() {
 
         const runKey = String(started.runKey || "");
         const startedAt = Date.now();
+        let consecutivePollFailures = 0;
         while (Date.now() - startedAt < 20 * 60 * 1000) {
           await new Promise((resolve) => setTimeout(resolve, 2500));
-          const progressResponse = await fetch(
-            `/api/automation/weekly-progress?runKey=${encodeURIComponent(runKey)}`,
-            { cache: "no-store" },
-          );
-          const progress = await readApiJson(progressResponse);
-          if (!progressResponse.ok)
-            throw new Error(progress.error || "주간 계획 상태 조회에 실패했습니다.");
+          let progressResponse: Response;
+          let progress: any;
+          try {
+            progressResponse = await fetch(
+              `/api/automation/weekly-progress?runKey=${encodeURIComponent(runKey)}`,
+              { cache: "no-store" },
+            );
+            progress = await readApiJson(progressResponse);
+            if (!progressResponse.ok)
+              throw new Error(progress.error || "주간 계획 상태 조회에 실패했습니다.");
+            consecutivePollFailures = 0;
+          } catch (pollError: any) {
+            consecutivePollFailures += 1;
+            setBusy(
+              `주간 계획은 서버에서 계속 진행 중 · 상태 연결 재시도 ${consecutivePollFailures}/8`,
+            );
+            if (consecutivePollFailures < 8) continue;
+            throw new Error(
+              "상태 조회 연결이 반복해서 끊겼습니다. 서버 작업은 계속될 수 있으므로 잠시 후 새로고침해 진행 상태를 확인하세요.",
+            );
+          }
 
           setBusy(
             progress.status === "ready"
               ? "주간 계획 저장 완료"
-              : `주간 계획 생성 중 · 카테고리 ${progress.categoryCount} · 키워드 ${progress.keywordCount} · 글 방향 ${progress.completedAngles}/${progress.expectedAngles}`,
+              : `주간 계획 생성 중 · 카테고리 ${progress.categoryCount} · 키워드 ${progress.keywordCount} · 글 방향 ${progress.completedAngles}/${progress.expectedAngles}${progress.failures ? ` · 자동 재시도 ${progress.failures}회` : ""}`,
           );
 
           if (progress.status === "failed")
-            throw new Error(progress.error || "주간 계획 생성에 실패했습니다.");
+            throw new Error(
+              progress.error ||
+                "주간 계획 생성이 여러 차례 자동 재시도 후에도 완료되지 않았습니다.",
+            );
 
           if (progress.status === "ready") {
             await refreshAutomationStatus(true);
+            clearPlanningRun();
             setMessage(
               `주간 계획 생성이 완료됐습니다. 카테고리 ${progress.categoryCount}개 · 키워드 ${progress.keywordCount}개를 저장했습니다.`,
             );
