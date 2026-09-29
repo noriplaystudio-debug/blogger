@@ -100,20 +100,8 @@ export async function POST(req: NextRequest) {
           writerModel: config.writerModel,
           reviewerModel: config.reviewerModel,
         },
+        enforceBudget: false,
       });
-
-      if (!reservation.allowed) {
-        await updateJob(job.id, {
-          state: "waiting",
-          error: "월 AI 예산 한도로 다음 실행까지 대기합니다.",
-        });
-        if (runId)
-          await finishRun(runId, "partial", {
-            jobId,
-            state: "budget_paused",
-          });
-        return NextResponse.json({ ok: true, state: "budget_paused", jobId });
-      }
 
       const [existingArticles, performanceGuidance] = await Promise.all([
         getRecentArticles(30, targetBlogId),
