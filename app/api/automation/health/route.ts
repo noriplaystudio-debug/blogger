@@ -33,6 +33,7 @@ function safeRunDetail(detail: any) {
     requested: Number(detail?.requested || 0),
     processed: Number(detail?.processed || 0),
     syncedDrafts: Number(detail?.syncedDrafts || 0),
+    successful: Number(detail?.successful || 0),
     deferred: Number(detail?.deferred || 0),
     resultStates: results.reduce((acc: Record<string, number>, item: any) => {
       const key = String(item?.state || "unknown");
@@ -57,7 +58,12 @@ export async function GET() {
       recentAuditEvents(),
     ]);
 
-    const latestDaily = runs.find((run: any) => run.kind === "daily-production") || null;
+    const latestDaily =
+      runs.find((run: any) => run.kind === "daily-production") || null;
+    const latestWeekly =
+      runs.find((run: any) =>
+        ["weekly-plan", "weekly-plan-manual-step"].includes(run.kind),
+      ) || null;
     const publicationAudit = audit
       .filter((event: any) =>
         ["post_published", "published_reused", "draft_created", "draft_reused", "draft_updated", "draft_recreated"].includes(event.action),
@@ -88,6 +94,15 @@ export async function GET() {
               startedAt: latestDaily.started_at,
               finishedAt: latestDaily.finished_at,
               detail: safeRunDetail(latestDaily.detail),
+            }
+          : null,
+        latestWeeklyRun: latestWeekly
+          ? {
+              kind: latestWeekly.kind,
+              status: latestWeekly.status,
+              startedAt: latestWeekly.started_at,
+              finishedAt: latestWeekly.finished_at,
+              phase: String(latestWeekly.detail?.phase || latestWeekly.detail?.status || ""),
             }
           : null,
         recentPublicationActivity: publicationAudit,
