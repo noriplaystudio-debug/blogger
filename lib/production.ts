@@ -1021,7 +1021,7 @@ async function researchArticleEvidence(apiKey: string, body: any) {
     ? `\n이번 조사는 전체 주제를 처음부터 반복하는 조사가 아니다. 이전 검수에서 부족하다고 판정된 다음 주장만 우선 확인한다: ${JSON.stringify(body.recoveryContext).slice(0, 8000)}\n기존 조사에서 검증된 주장은 유지하고, 부족한 주장마다 새 원문 출처를 연결한다. 새 출처를 찾지 못한 주장은 unknowns에 남기고 글에서 삭제하거나 조건부 표현으로 축소한다.`
     : "";
 
-  const researchAttemptLimit = evidencePolicy.level === "strict" ? 3 : 2;
+  const researchAttemptLimit = evidencePolicy.level === "strict" ? 2 : 1;
   for (let attempt = 0; attempt < researchAttemptLimit; attempt += 1) {
     const recoveryInstruction =
       [
@@ -1333,29 +1333,45 @@ export async function produceArticle(
         review.issues.push(
           `본문에 조사 출처 링크가 부족합니다(${citedSourceCount}/${minimumCitations}).`,
         );
-      review.passed = Boolean(
-        review.passed &&
-        review.overallScore >= (strictEvidence ? 88 : 82) &&
-        review.factualScore >= (strictEvidence ? 90 : 82) &&
-        review.evidenceScore >= (strictEvidence ? 90 : 80) &&
-        review.usefulnessScore >= 80 &&
-        review.intentScore >= 82 &&
-        review.originalValueScore >= 75 &&
-        review.readabilityScore >= 75 &&
-        review.titleAccuracyScore >= (strictEvidence ? 90 : 82) &&
-        review.completenessScore >= 82 &&
-        review.titleAssessment.queryMatch >= 82 &&
-        review.titleAssessment.specificity >= 75 &&
-        review.titleAssessment.accuracy >= (strictEvidence ? 92 : 85) &&
-        review.titleAssessment.distinctiveness >= 75 &&
-        review.titleAssessment.concision >= 75 &&
-        finalDiagnostics.passed &&
-        citedSourceCount >= minimumCitations,
+      const standardCraftPass = Boolean(
+        finalDiagnostics &&
+          finalDiagnostics.paragraphCount >= 3 &&
+          finalDiagnostics.headingCount >= 2 &&
+          finalDiagnostics.titleSimilarity < 0.75 &&
+          finalDiagnostics.bodySimilarity < 0.5,
       );
+      review.passed = strictEvidence
+        ? Boolean(
+            review.passed &&
+              review.overallScore >= 88 &&
+              review.factualScore >= 90 &&
+              review.evidenceScore >= 90 &&
+              review.usefulnessScore >= 80 &&
+              review.intentScore >= 82 &&
+              review.titleAccuracyScore >= 90 &&
+              review.completenessScore >= 82 &&
+              review.titleAssessment.queryMatch >= 82 &&
+              review.titleAssessment.accuracy >= 92 &&
+              finalDiagnostics.passed &&
+              citedSourceCount >= minimumCitations,
+          )
+        : Boolean(
+            review.overallScore >= 78 &&
+              review.factualScore >= 80 &&
+              review.evidenceScore >= 75 &&
+              review.usefulnessScore >= 75 &&
+              review.intentScore >= 78 &&
+              review.titleAccuracyScore >= 80 &&
+              review.completenessScore >= 78 &&
+              review.titleAssessment.queryMatch >= 78 &&
+              review.titleAssessment.accuracy >= 82 &&
+              standardCraftPass &&
+              citedSourceCount >= minimumCitations,
+          );
       if (
         review.passed &&
         keys.openai &&
-        (strictEvidence || body.angle?.contentMode === "realtime")
+        strictEvidence
       ) {
         const canUsePrevalidatedAudit = Boolean(
           researchDossier &&
