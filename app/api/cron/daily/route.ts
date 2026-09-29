@@ -13,6 +13,7 @@ import {
   getTodayPublishedCount,
   hasDatabase,
   recoverStaleArticleJobs,
+  resetGenericGenerationFailures,
   releaseAutomationLock,
   startRun,
 } from "@/lib/store";
@@ -58,10 +59,12 @@ export async function GET(req: NextRequest) {
 
     // Repair jobs/runs left behind by a previous hard server timeout before
     // deciding how many new workers can be launched.
-    const [recoveredJobIds, staleRunsClosed] = await Promise.all([
-      recoverStaleArticleJobs(15),
-      finishStaleAutomationRuns(15),
-    ]);
+    const [resetGenerationFailures, recoveredJobIds, staleRunsClosed] =
+      await Promise.all([
+        resetGenericGenerationFailures(),
+        recoverStaleArticleJobs(15),
+        finishStaleAutomationRuns(15),
+      ]);
 
     lockOwner = await acquireAutomationLock("daily-dispatch", 5);
     if (!lockOwner)
@@ -76,6 +79,7 @@ export async function GET(req: NextRequest) {
       const detail = {
         requested: config.dailyArticleLimit,
         queued: 0,
+        resetGenerationFailures: resetGenerationFailures.length,
         recovered: recoveredJobIds.length,
         staleRunsClosed,
         budget,
@@ -107,6 +111,7 @@ export async function GET(req: NextRequest) {
         publishedToday,
         reserved,
         queued: 0,
+        resetGenerationFailures: resetGenerationFailures.length,
         recovered: recoveredJobIds.length,
         staleRunsClosed,
       };
@@ -139,6 +144,7 @@ export async function GET(req: NextRequest) {
       queued: jobIds.length,
       queuedReady: readyJobs.length,
       queuedProduction: productionJobs.length,
+      resetGenerationFailures: resetGenerationFailures.length,
       recovered: recoveredJobIds.length,
       staleRunsClosed,
       jobIds,
