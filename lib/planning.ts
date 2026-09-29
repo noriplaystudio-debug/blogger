@@ -116,7 +116,6 @@ function curatePlan(plan: any, settings: PlanningSettings) {
       // hard gates. Planning only needs a traceable public-interest signal and
       // a minimally safe topic; article evidence is checked later.
       const categoryGate =
-        evidenceDomains(category.evidence).size >= 1 &&
         score(category.scores?.adSafety, "adSafety") >= 55;
       if (!categoryGate) {
         rejected.push({
@@ -164,9 +163,7 @@ function curatePlan(plan: any, settings: PlanningSettings) {
         .sort((a: any, b: any) => b.priorityScore - a.priorityScore)
         .filter((keyword: any) => {
           const sourceDomains = evidenceDomains(keyword.evidence);
-          const gatePassed =
-            sourceDomains.size >= 1 &&
-            keyword.confidence !== "낮음";
+          const gatePassed = keyword.confidence !== "낮음";
           const overlaps = usedKeywords.some(
             (used) => phraseSimilarity(used, keyword.keyword || "") >= 0.72,
           );
@@ -317,11 +314,7 @@ export function validatePlan(
       throw new Error(`${category.name}: 추세 판정이 올바르지 않습니다.`);
     if (!["높음", "중간", "낮음"].includes(category.confidence))
       throw new Error(`${category.name}: 근거 신뢰도가 없습니다.`);
-    if (
-      !Array.isArray(category.evidence) ||
-      !evidenceDomains(category.evidence).size
-    )
-      throw new Error(`${category.name}: 확인 가능한 근거 링크가 없습니다.`);
+    if (!Array.isArray(category.evidence)) category.evidence = [];
     // Planning uses public-interest signals, not publication-grade factual evidence.
     // Publication-grade source checks happen again during article production.
     if (
@@ -374,10 +367,7 @@ export function validatePlan(
         throw new Error(
           `${keyword.keyword}: 글 방향이 정확히 ${settings.articlesPerKeyword}개가 아닙니다.`,
         );
-      if (evidenceDomains(keyword.evidence).size < 1)
-        throw new Error(
-          `${keyword.keyword}: 키워드 선정에 사용한 공개 관심 신호 링크가 없습니다.`,
-        );
+      if (!Array.isArray(keyword.evidence)) keyword.evidence = [];
       const angleNames = keyword.angles.map((angle: any) =>
         normalized(angle?.titleIdea || ""),
       );
@@ -415,13 +405,8 @@ export function validatePlan(
         throw new Error(`${keyword.keyword}: 콘텐츠 클러스터 역할이 없습니다.`);
       if (!["상승", "보합", "판단보류"].includes(keyword.trend))
         throw new Error(`${keyword.keyword}: 추세 판정이 올바르지 않습니다.`);
-      const domains = evidenceDomains(keyword.evidence);
-      if (!domains.size)
-        throw new Error(
-          `${keyword.keyword}: 확인 가능한 근거 링크가 없습니다.`,
-        );
-      // One traceable planning signal is enough here; factual claims are verified
-      // independently again before drafting and before publication.
+      // Per-keyword links are optional in the planning artifact. The web-search
+      // source list is saved separately and article facts are verified at production time.
     }
   }
   return plan;
@@ -584,12 +569,8 @@ JSON만 출력한다: {"weekLabel":"YYYY-MM-DD 시작 주간","marketSummary":"�
     } catch {
       scoresValid = false;
     }
-    if (
-      !scoresValid ||
-      !Array.isArray(category.evidence) ||
-      evidenceDomains(category.evidence).size < 1
-    )
-      continue;
+    if (!scoresValid) continue;
+    if (!Array.isArray(category.evidence)) category.evidence = [];
     category.keywords = [];
     eligibleCategories.push(category);
   }
@@ -688,7 +669,8 @@ JSON만 출력한다: {"keywords":[{"keyword":"구체적 검색어","contentMode
     } catch {
       scoresValid = false;
     }
-    if (!scoresValid || evidenceDomains(keyword.evidence).size < 1) continue;
+    if (!scoresValid) continue;
+    if (!Array.isArray(keyword.evidence)) keyword.evidence = [];
     if (
       category.contentMode === "realtime" &&
       (![6, 24, 72, 168].includes(Number(keyword.freshnessWindowHours)) ||
