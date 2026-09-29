@@ -148,17 +148,25 @@ export async function GET(req: NextRequest) {
     while (draft && stageCalls < MAX_STAGE_CALLS_PER_INVOCATION) {
       const categoryNeedingKeywords = draft.categories.find(
         (category: any) =>
-          !Array.isArray(category.keywords) || category.keywords.length === 0,
+          !category?.planningSkipped &&
+          (!Array.isArray(category.keywords) || category.keywords.length === 0),
       );
       if (categoryNeedingKeywords) {
-        const keywordResult = await createKeywordStage(process.env.OPENAI_API_KEY, {
-          category: categoryNeedingKeywords,
-          settings,
-          recentKeywords,
-          recentContent,
-        });
-        categoryNeedingKeywords.keywords = keywordResult.keywords;
-        sources = mergeSources(sources, keywordResult.sources || []);
+        try {
+          const keywordResult = await createKeywordStage(process.env.OPENAI_API_KEY, {
+            category: categoryNeedingKeywords,
+            settings,
+            recentKeywords,
+            recentContent,
+          });
+          categoryNeedingKeywords.keywords = keywordResult.keywords;
+          categoryNeedingKeywords.planningFailures = 0;
+          sources = mergeSources(sources, keywordResult.sources || []);
+        } catch (error: any) {
+          const failures = Number(categoryNeedingKeywords.planningFailures || 0) + 1;
+          categoryNeedingKeywords.planningFailures = failures;
+          if (failures >= 2) categoryNeedingKeywords.planningSkipped = true;
+        }
         stageCalls += 1;
         await saveWeeklyPlanningProgress({
           runKey,
@@ -176,8 +184,9 @@ export async function GET(req: NextRequest) {
       for (const category of draft.categories) {
         for (const keyword of category.keywords || []) {
           if (
-            !Array.isArray(keyword.angles) ||
-            keyword.angles.length !== settings.articlesPerKeyword
+            !keyword?.planningSkipped &&
+            (!Array.isArray(keyword.angles) ||
+              keyword.angles.length !== settings.articlesPerKeyword)
           ) {
             angleTarget = { category, keyword };
             break;
@@ -187,12 +196,19 @@ export async function GET(req: NextRequest) {
       }
 
       if (angleTarget) {
-        const angleResult = await createAngleStage(process.env.OPENAI_API_KEY, {
-          category: angleTarget.category,
-          keyword: angleTarget.keyword,
-          settings,
-        });
-        angleTarget.keyword.angles = angleResult.angles;
+        try {
+          const angleResult = await createAngleStage(process.env.OPENAI_API_KEY, {
+            category: angleTarget.category,
+            keyword: angleTarget.keyword,
+            settings,
+          });
+          angleTarget.keyword.angles = angleResult.angles;
+          angleTarget.keyword.planningFailures = 0;
+        } catch (error: any) {
+          const failures = Number(angleTarget.keyword.planningFailures || 0) + 1;
+          angleTarget.keyword.planningFailures = failures;
+          if (failures >= 2) angleTarget.keyword.planningSkipped = true;
+        }
         stageCalls += 1;
         await saveWeeklyPlanningProgress({
           runKey,
@@ -211,12 +227,16 @@ export async function GET(req: NextRequest) {
 
     const incompleteCategories = (draft?.categories || []).filter(
       (category: any) =>
-        !Array.isArray(category.keywords) ||
-        category.keywords.length === 0 ||
-        category.keywords.some(
-          (keyword: any) =>
-            !Array.isArray(keyword.angles) ||
-            keyword.angles.length !== settings.articlesPerKeyword,
+        !category?.planningSkipped &&
+        (
+          !Array.isArray(category.keywords) ||
+          category.keywords.length === 0 ||
+          category.keywords.some(
+            (keyword: any) =>
+              !keyword?.planningSkipped &&
+              (!Array.isArray(keyword.angles) ||
+                keyword.angles.length !== settings.articlesPerKeyword),
+          )
         ),
     ).length;
 
@@ -232,7 +252,19 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: true, partial: true, ...detail });
     }
 
-    const plan = finalizeStagedPlan(draft, settings);
+    const finalDraft = {
+      ...draft,
+      categories: (draft.categories || [])
+        .filter((category: any) => !category?.planningSkipped)
+        .map((category: any) => ({
+          ...category,
+          keywords: (category.keywords || []).filter(
+            (keyword: any) => !keyword?.planningSkipped,
+          ),
+        }))
+        .filter((category: any) => category.keywords.length > 0),
+    };
+    const plan = finalizeStagedPlan(finalDraft, settings);
     const workspace = await persistWeeklyPlan(
       plan,
       sources,
