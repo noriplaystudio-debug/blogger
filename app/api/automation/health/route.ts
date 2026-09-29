@@ -3,6 +3,7 @@ import {
   getAutomationConfig,
   getOperationalStats,
   getWorkspace,
+  getMonthlyCostSummary,
   hasDatabase,
   recentAuditEvents,
   recentRuns,
@@ -52,12 +53,13 @@ export async function GET() {
     );
 
   try {
-    const [config, operational, workspace, runs, audit] = await Promise.all([
+    const [config, operational, workspace, runs, audit, monthlyCosts] = await Promise.all([
       getAutomationConfig(),
       getOperationalStats(),
       getWorkspace(),
       recentRuns(),
       recentAuditEvents(),
+      getMonthlyCostSummary(),
     ]);
 
     const latestDaily =
@@ -131,6 +133,19 @@ export async function GET() {
           primaryBlogName: process.env.PRIMARY_BLOGGER_NAME?.trim() || "장학짱",
         },
         operational,
+        budget: {
+          monthlyAiBudgetWon: config.monthlyAiBudgetWon,
+          estimatedArticleCostWon: config.estimatedArticleCostWon,
+          estimatedWeeklyPlanCostWon: config.estimatedWeeklyPlanCostWon,
+          estimatedAnalysisCostWon: config.estimatedAnalysisCostWon,
+          aiCostWon: monthlyCosts.aiCostWon,
+          byKind: monthlyCosts.byKind,
+          pausedByConfiguredLimit:
+            config.pauseOnBudget &&
+            config.monthlyAiBudgetWon > 0 &&
+            monthlyCosts.aiCostWon + config.estimatedArticleCostWon >
+              config.monthlyAiBudgetWon,
+        },
         weeklyPlan: {
           categories: planCategories.length,
           keywords: planKeywordCount,
