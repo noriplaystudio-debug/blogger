@@ -1309,22 +1309,25 @@ export async function produceArticle(
             },
           ];
         }
-        const requiredItems =
+        const requiredItems: string[] = (
           researchDossier?.coverage
             ?.filter((item) => item.supported)
-            .map((item) => item.requirement) ||
-          (Array.isArray(body.angle?.mustCover) ? body.angle.mustCover : []);
+            .map((item) => String(item.requirement || "")) ||
+          (Array.isArray(body.angle?.mustCover) ? body.angle.mustCover : [])
+        )
+          .map((item: any) => String(item || "").trim())
+          .filter(Boolean);
         const draftTextLength = plainText(parsedDraft.html || "").length;
-        const coveredRequirements = new Set(
-          (Array.isArray(parsedDraft.coverageMap) ? parsedDraft.coverageMap : [])
-            .filter((item: any) => item?.addressed)
-            .map((item: any) => String(item.requirement || "").trim())
-            .filter(Boolean),
-        );
-        const missingRequirements = requiredItems.filter(
+        const coveredRequirements: string[] = (
+          Array.isArray(parsedDraft.coverageMap) ? parsedDraft.coverageMap : []
+        )
+          .filter((item: any) => Boolean(item?.addressed))
+          .map((item: any) => String(item.requirement || "").trim())
+          .filter(Boolean);
+        const missingRequirements: string[] = requiredItems.filter(
           (requirement: string) =>
-            ![...coveredRequirements].some(
-              (covered) => similarity(String(covered), requirement) >= 0.55,
+            !coveredRequirements.some(
+              (covered: string) => similarity(covered, requirement) >= 0.55,
             ),
         );
 
@@ -1361,8 +1364,12 @@ ${research}
 ${JSON.stringify(sources)}`,
           });
           parsedDraft = parseJson<Draft>(repairedDraftText);
+          const repairNotes: string[] = [];
+          if (draftTextLength < 1500) repairNotes.push("본문 길이 보완");
+          if (missingRequirements.length)
+            repairNotes.push(`필수 내용 ${missingRequirements.length}개 보완`);
           generationFailures.push(
-            `부분 수정 완료: ${draftTextLength < 1500 ? "본문 길이 보완" : ""}${draftTextLength < 1500 && missingRequirements.length ? ", " : ""}${missingRequirements.length ? `필수 내용 ${missingRequirements.length}개 보완` : ""}`,
+            `부분 수정 완료: ${repairNotes.join(", ") || "형식 보완"}`,
           );
         }
 
