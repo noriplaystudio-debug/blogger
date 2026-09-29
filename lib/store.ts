@@ -729,7 +729,7 @@ export async function claimDueJobs(limit = 7) {
   const today = koreaDate();
   return db().begin(async (tx) => {
     const rows =
-      await tx`SELECT * FROM article_jobs WHERE scheduled_date IS NOT NULL AND scheduled_date <= ${today} AND (state='waiting' OR (state='error' AND attempts < 3) OR (state='needs_review' AND article IS NOT NULL AND attempts < 3 AND COALESCE(article->'recoveryDecision'->>'automatic','true')='true') OR (state='working' AND article IS NULL AND updated_at < now() - interval '2 hours')) ORDER BY scheduled_date, ordinal LIMIT ${limit} FOR UPDATE SKIP LOCKED`;
+      await tx`SELECT * FROM article_jobs WHERE scheduled_date IS NOT NULL AND scheduled_date <= ${today} AND (state='waiting' OR (state='error' AND attempts < 3) OR (state='needs_review' AND article IS NOT NULL AND attempts < 3 AND COALESCE(article->'recoveryDecision'->>'automatic','true')='true') OR (state='working' AND article IS NULL AND updated_at < now() - interval '20 minutes')) ORDER BY scheduled_date, ordinal LIMIT ${limit} FOR UPDATE SKIP LOCKED`;
     if (rows.length)
       await tx`UPDATE article_jobs SET state='working', attempts=attempts+1, error=null, updated_at=now() WHERE id IN ${tx(rows.map((row) => row.id))}`;
     return rows;
@@ -746,7 +746,7 @@ export async function claimReadyDraftJobs(limit = 20) {
         AND article IS NOT NULL
         AND (
           state='ready'
-          OR (state='working' AND updated_at < now() - interval '2 hours')
+          OR (state='working' AND updated_at < now() - interval '20 minutes')
         )
       ORDER BY scheduled_date, ordinal
       LIMIT ${Math.max(1, Math.min(limit, 50))}
@@ -842,7 +842,7 @@ export async function getOperationalStats() {
     count(*) FILTER (WHERE state='error')::int AS errors,
     count(*) FILTER (WHERE state='error' AND attempts >= 3)::int AS blocked_errors,
     count(*) FILTER (WHERE blog_id IS NULL AND state IN ('waiting','ready','needs_review','source_blocked'))::int AS unmapped,
-    count(*) FILTER (WHERE state='working' AND updated_at < now() - interval '2 hours')::int AS stale_working
+    count(*) FILTER (WHERE state='working' AND updated_at < now() - interval '20 minutes')::int AS stale_working
     FROM article_jobs`;
   return Object.fromEntries(
     Object.entries(row || {}).map(([key, value]) => [key, Number(value || 0)]),
