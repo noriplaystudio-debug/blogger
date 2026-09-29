@@ -545,6 +545,7 @@ export async function createCategoryStage(
 Google Trends·자동완성·관련 검색어·최근 보도량·공식 자료 등 공개 관심 신호를 확인하되 자동완성 순서를 검색량으로 주장하지 않는다. 각 카테고리는 선정 이유를 추적할 수 있는 실제 URL을 evidence에 최소 1개 넣고, 서로 다른 신호가 2개 이상이면 우선한다. 이 단계는 수요·관심도 선별 단계이므로 글 본문의 사실 검증 수준까지 요구하지 않는다. 사용자 개인 검색 기록은 사용하지 않는다.
 
 현재 운영 카테고리: ${JSON.stringify((context.categoryPortfolio || []).slice(0, 20))}
+현재 운영 카테고리에 이름이 이미 있는 항목은 새 후보로 다시 출력하지 않는다. 기존 카테고리의 부족한 주간 발행량을 보충하려는 호출일 수 있으므로, 기존 이름·거의 같은 범위·같은 독자 문제를 피하고 서로 다른 신규 카테고리를 우선 제안한다.
 최근 사용 키워드·글은 그대로 반복하지 않고 빈틈을 찾는 참고로만 쓴다: ${JSON.stringify({ keywords: (context.recentKeywords || []).slice(0, 100), content: (context.recentContent || []).slice(0, 100) }).slice(0, 10000)}
 성과 참고: ${JSON.stringify(context.performanceGuidance || []).slice(0, 8000)}
 수익 전략 참고: ${JSON.stringify(context.strategyGuidance || {}).slice(0, 6000)}
