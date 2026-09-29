@@ -765,6 +765,19 @@ export async function getJobPublicationContext(id: string) {
     : null;
 }
 
+export async function resetGenericGenerationFailures() {
+  await ensureSchema();
+  const rows = await db()`UPDATE article_jobs
+    SET state='waiting',
+        attempts=0,
+        error='작성 파이프라인 오류 수정 후 자동 재시도 대기',
+        updated_at=now()
+    WHERE state='error'
+      AND error='글 작성 결과가 없습니다.'
+    RETURNING id`;
+  return rows.map((row) => String(row.id));
+}
+
 export async function recoverStaleArticleJobs(minutes = 15) {
   await ensureSchema();
   const safeMinutes = Math.max(10, Math.min(Number(minutes) || 15, 60));
