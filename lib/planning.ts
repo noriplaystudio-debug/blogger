@@ -905,9 +905,22 @@ export async function createAngleStage(
 
 export function finalizeStagedPlan(draft: any, settings: PlanningSettings) {
   const normalizedSettings = normalizePlanningSettings(settings);
+  const activeCategoryCount = Array.isArray(draft?.categories)
+    ? draft.categories.filter((category: any) => !category?.planningSkipped).length
+    : 0;
+  // The configured category count is a starting target, not a hard ceiling.
+  // If keyword consolidation reduces weekly article capacity, supplemental
+  // categories may be added so the daily publishing target can still be met.
+  const effectiveSettings = {
+    ...normalizedSettings,
+    categoryCount: Math.min(
+      20,
+      Math.max(normalizedSettings.categoryCount, activeCategoryCount),
+    ),
+  };
   return validatePlan(
-    curatePlan(draft, normalizedSettings),
-    normalizedSettings,
+    curatePlan(draft, effectiveSettings),
+    effectiveSettings,
   );
 }
 
