@@ -280,7 +280,9 @@ export async function GET(req: NextRequest) {
           if (keyword?.planningSkipped) continue;
           if (
             !Array.isArray(keyword.angles) ||
-            keyword.angles.length !== settings.articlesPerKeyword
+            keyword.angles.length !== Number(
+                keyword.articleCountOverride || settings.articlesPerKeyword,
+              )
           ) {
             const angleResult = await createAngleStage(process.env.OPENAI_API_KEY, {
               category,
@@ -318,7 +320,9 @@ export async function GET(req: NextRequest) {
             (keyword: any) =>
               !keyword?.planningSkipped &&
               (!Array.isArray(keyword.angles) ||
-                keyword.angles.length !== settings.articlesPerKeyword),
+                keyword.angles.length !== Number(
+                keyword.articleCountOverride || settings.articlesPerKeyword,
+              )),
           )
         ),
     ).length;
