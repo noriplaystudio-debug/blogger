@@ -75,23 +75,6 @@ export async function GET(req: NextRequest) {
 
     runId = await startRun("daily-production");
     const budget = await getBudgetGuard();
-    if (budget.paused) {
-      const detail = {
-        requested: config.dailyArticleLimit,
-        queued: 0,
-        resetGenerationFailures: resetGenerationFailures.length,
-        recovered: recoveredJobIds.length,
-        staleRunsClosed,
-        budget,
-      };
-      await finishRun(runId, "partial", detail);
-      return NextResponse.json({
-        skipped: true,
-        reason: "monthly AI budget reached",
-        ...detail,
-      });
-    }
-
     const [publishedToday, operational] = await Promise.all([
       getTodayPublishedCount(),
       getOperationalStats(),
@@ -167,6 +150,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       ...detail,
+      budgetWarning: budget.paused
+        ? "설정된 월 AI 예산을 초과했지만 자동 게시 우선 정책으로 계속 진행합니다."
+        : null,
       message: jobIds.length
         ? "글 작업을 개별 백그라운드 worker로 넘겼습니다."
         : "현재 실행 가능한 글 작업이 없습니다.",
