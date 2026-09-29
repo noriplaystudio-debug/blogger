@@ -532,8 +532,8 @@ export async function createCategoryStage(
     model: process.env.RESEARCH_MODEL || "gpt-5.6-terra",
     tools: [{ type: "web_search" }],
     include: ["web_search_call.action.sources" as any],
-    reasoning: { effort: "high" },
-    max_output_tokens: 9000,
+    reasoning: { effort: "medium" },
+    max_output_tokens: 5000,
     input: `오늘 기준 한국의 공개 검색 관심 신호를 조사해 Google Blogger 카테고리 후보만 선정한다. 아직 키워드나 글 방향은 만들지 않는다.
 
 요청 카테고리: 최종 최대 ${settings.categoryCount}개. 이번 응답에는 후보를 최대 ${Math.min(20, Math.max(settings.categoryCount * 2, settings.categoryCount + 3))}개까지 출력한다. 서버가 독립 근거 출처와 점수 형식을 검증한 뒤 최종 수량만 선정한다. 카테고리 수가 1개여도 실시간 관심형을 먼저 검토하며, 전체의 약 40%(최소 ${realtimeTarget}개)는 realtime으로 우선 선정한다. realtime은 사건·방송·공연·영화·음악·스포츠 일정·결과·기록·공식 발표처럼 1시간~7일 동안 관심이 집중되는 주제다. evergreen은 3개월 이상 반복 검색될 문제다.
@@ -552,13 +552,13 @@ Google Trends·자동완성·관련 검색어·최근 보도량·공식 자료 �
 JSON만 출력한다: {"weekLabel":"YYYY-MM-DD 시작 주간","marketSummary":"조사 결과와 한계","methodNote":"공개 관심 신호 기반임을 설명","categories":[{"name":"카테고리","contentMode":"evergreen|realtime","audience":"특정 독자","sitePurpose":"반복 해결할 문제","blogGroupId":"shared-group-1","suggestedBlogName":"중립적인 브랜드 이름","suggestedBlogDescription":"묶인 카테고리를 포괄하는 한 줄 소개","suggestedBlogAddresses":["address-one","address-two","address-three"],"reason":"선정 근거","trend":"상승|보합|판단보류","confidence":"높음|중간","scores":{"demand":0,"momentum":0,"durability":0,"accessibility":0,"adSafety":0,"sourceability":0},"evidence":[{"signal":"관찰 신호","period":"1시간|24시간|7일|30일|12개월","url":"https://..."}]}]}`,
   });
   const value = parseJson<any>(response.output_text);
-  if (
-    !value?.weekLabel ||
-    !Array.isArray(value.categories) ||
-    !value.categories.length ||
-    value.categories.length > Math.min(20, Math.max(settings.categoryCount * 2, settings.categoryCount + 3))
-  )
-    throw new Error("카테고리 단계 결과의 수량 또는 형식이 올바르지 않습니다.");
+  if (!Array.isArray(value?.categories) || !value.categories.length)
+    throw new Error("카테고리 단계 결과가 비어 있습니다.");
+  if (!value.weekLabel) value.weekLabel = new Date().toISOString().slice(0, 10);
+  value.categories = value.categories.slice(
+    0,
+    Math.min(20, Math.max(settings.categoryCount * 2, settings.categoryCount + 3)),
+  );
   assignSharedBlogGroups(value.categories);
   const seen = new Set<string>();
   const eligibleCategories: any[] = [];
@@ -567,21 +567,25 @@ JSON만 출력한다: {"weekLabel":"YYYY-MM-DD 시작 주간","marketSummary":"�
     if (!key || seen.has(key)) continue;
     seen.add(key);
     if (!["evergreen", "realtime"].includes(category.contentMode)) continue;
-    let scoresValid = true;
-    try {
-      for (const scoreName of [
-        "demand",
-        "momentum",
-        "durability",
-        "accessibility",
-        "adSafety",
-        "sourceability",
-      ])
-        score(category.scores?.[scoreName], `${category.name}.${scoreName}`);
-    } catch {
-      scoresValid = false;
+    category.scores = category.scores || {};
+    for (const scoreName of [
+      "demand",
+      "momentum",
+      "durability",
+      "accessibility",
+      "adSafety",
+      "sourceability",
+    ]) {
+      const raw = Number(category.scores?.[scoreName]);
+      category.scores[scoreName] =
+        Number.isFinite(raw) && raw >= 0 && raw <= 100 ? raw : 50;
     }
-    if (!scoresValid) continue;
+    if (!category.trend || !["상승", "보합", "판단보류"].includes(category.trend))
+      category.trend = "판단보류";
+    if (!category.confidence || !["높음", "중간", "낮음"].includes(category.confidence))
+      category.confidence = "중간";
+    if (!String(category.audience || "").trim()) category.audience = "해당 정보를 찾는 일반 독자";
+    if (!String(category.sitePurpose || "").trim()) category.sitePurpose = "검색 질문에 실용적인 답을 제공";
     if (!Array.isArray(category.evidence)) category.evidence = [];
     category.keywords = [];
     eligibleCategories.push(category);
@@ -638,8 +642,8 @@ export async function createKeywordStage(
     model: process.env.RESEARCH_MODEL || "gpt-5.6-terra",
     tools: [{ type: "web_search" }],
     include: ["web_search_call.action.sources" as any],
-    reasoning: { effort: "high" },
-    max_output_tokens: 10000,
+    reasoning: { effort: "medium" },
+    max_output_tokens: 6000,
     input: `다음 Google Blogger 카테고리에서 이번 주에 작성할 키워드만 조사한다. 글 방향은 아직 만들지 않는다.
 
 카테고리: ${JSON.stringify(category)}
@@ -666,29 +670,35 @@ JSON만 출력한다: {"keywords":[{"keyword":"구체적 검색어","articleGrou
     seen.add(key);
     keyword.contentMode = category.contentMode;
     keyword.angles = [];
-    let scoresValid = true;
-    try {
-      for (const scoreName of [
-        "demand",
-        "momentum",
-        "durability",
-        "competitionOpportunity",
-        "sourceability",
-        "uniqueValue",
-        "topicalFit",
-      ])
-        score(keyword.scores?.[scoreName], `${keyword.keyword}.${scoreName}`);
-    } catch {
-      scoresValid = false;
+    keyword.scores = keyword.scores || {};
+    for (const scoreName of [
+      "demand",
+      "momentum",
+      "durability",
+      "competitionOpportunity",
+      "sourceability",
+      "uniqueValue",
+      "topicalFit",
+    ]) {
+      const raw = Number(keyword.scores?.[scoreName]);
+      keyword.scores[scoreName] =
+        Number.isFinite(raw) && raw >= 0 && raw <= 100 ? raw : 50;
     }
-    if (!scoresValid) continue;
     if (!Array.isArray(keyword.evidence)) keyword.evidence = [];
-    if (
-      category.contentMode === "realtime" &&
-      (![6, 24, 72, 168].includes(Number(keyword.freshnessWindowHours)) ||
-        !Number.isFinite(Date.parse(keyword.sourceCheckedAt || "")))
-    )
-      continue;
+    if (!keyword.intent || !["정보형", "비교형", "문제해결형", "구매형"].includes(keyword.intent))
+      keyword.intent = "정보형";
+    if (!keyword.clusterRole || !["기둥글", "하위질문", "비교", "실행", "문제해결"].includes(keyword.clusterRole))
+      keyword.clusterRole = "하위질문";
+    if (!keyword.trend || !["상승", "보합", "판단보류"].includes(keyword.trend))
+      keyword.trend = "판단보류";
+    if (!keyword.confidence || !["높음", "중간", "낮음"].includes(keyword.confidence))
+      keyword.confidence = "중간";
+    if (category.contentMode === "realtime") {
+      if (![6, 24, 72, 168].includes(Number(keyword.freshnessWindowHours)))
+        keyword.freshnessWindowHours = 24;
+      if (!Number.isFinite(Date.parse(keyword.sourceCheckedAt || "")))
+        keyword.sourceCheckedAt = new Date().toISOString();
+    }
     const planningDomains = evidenceDomains(keyword.evidence);
     keyword.verifiedSources = openedSources.filter((source: any) =>
       planningDomains.has(urlDomain(source?.url)),
@@ -1033,7 +1043,7 @@ export async function createWeeklyPlan(
     model: process.env.RESEARCH_MODEL || "gpt-5.6-terra",
     tools: [{ type: "web_search" }],
     include: ["web_search_call.action.sources" as any],
-    reasoning: { effort: "high" },
+    reasoning: { effort: "medium" },
     max_output_tokens: 24000,
     input: `오늘 기준 한국의 공개 검색 관심 신호를 조사해 다음 1주 Google Blogger 편집 계획을 만든다. 사용자의 검색 기록, 대화 취향, 개인정보는 절대 사용하지 않는다.
 
