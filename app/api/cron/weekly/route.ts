@@ -10,6 +10,7 @@ import {
   acquireAutomationLock,
   finishRun,
   getAutomationConfig,
+  getCurrentWeekPlan,
   getPortfolioPerformanceGuidance,
   getRecentContentInventory,
   getRecentKeywords,
@@ -22,7 +23,6 @@ import {
   reserveEstimatedCost,
   saveWeeklyPlanningProgress,
   startRun,
-  weeklyPlanExists,
 } from "@/lib/store";
 
 export const maxDuration = 300;
@@ -65,10 +65,30 @@ export async function GET(req: NextRequest) {
     if (!config.enabled)
       return NextResponse.json({ skipped: true, reason: "automation disabled" });
 
-    if (await weeklyPlanExists(weekStart))
+    const currentWeek = await getCurrentWeekPlan();
+    const currentCategories = Array.isArray(currentWeek?.plan?.categories)
+      ? currentWeek!.plan.categories
+      : [];
+    const currentPlanComplete =
+      currentCategories.length >= config.categoryCount &&
+      currentCategories
+        .slice(0, config.categoryCount)
+        .every(
+          (category: any) =>
+            Array.isArray(category.keywords) &&
+            category.keywords.length >= config.keywordsPerCategory &&
+            category.keywords
+              .slice(0, config.keywordsPerCategory)
+              .every(
+                (keyword: any) =>
+                  Array.isArray(keyword.angles) &&
+                  keyword.angles.length >= config.articlesPerKeyword,
+              ),
+        );
+    if (currentPlanComplete)
       return NextResponse.json({
         skipped: true,
-        reason: "weekly plan already ready",
+        reason: "weekly plan already complete",
         weekStart,
       });
 
@@ -116,8 +136,18 @@ export async function GET(req: NextRequest) {
     let progress = await getWeeklyPlanningProgress(runKey);
     if (progress && !sameSettings(progress.settings, settings)) progress = null;
 
-    let draft: any = progress?.draft || null;
-    let sources: any[] = progress?.sources || [];
+    let draft: any =
+      progress?.draft ||
+      (currentCategories.length
+        ? {
+            ...currentWeek!.plan,
+            categories: currentCategories,
+            resumedFromExistingPlan: true,
+          }
+        : null);
+    let sources: any[] =
+      progress?.sources ||
+      (currentCategories.length ? currentWeek?.sources || [] : []);
     let stageCalls = 0;
 
     if (!draft && stageCalls < MAX_STAGE_CALLS_PER_INVOCATION) {
@@ -146,12 +176,59 @@ export async function GET(req: NextRequest) {
     }
 
     while (draft && stageCalls < MAX_STAGE_CALLS_PER_INVOCATION) {
-      const completedCategoryCount = (draft.categories || []).filter(
+      let completedCategoryCount = (draft.categories || []).filter(
         (category: any) =>
           !category?.planningSkipped &&
           Array.isArray(category.keywords) &&
           category.keywords.length > 0,
       ).length;
+      const activeCandidateCount = (draft.categories || []).filter(
+        (category: any) => !category?.planningSkipped,
+      ).length;
+      if (
+        completedCategoryCount < Number(settings.categoryCount) &&
+        activeCandidateCount < Number(settings.categoryCount) &&
+        stageCalls < MAX_STAGE_CALLS_PER_INVOCATION
+      ) {
+        const categoryResult = await createCategoryStage(process.env.OPENAI_API_KEY, {
+          categoryPortfolio: (draft.categories || []).map(
+            (category: any) => category.name,
+          ),
+          recentKeywords,
+          recentContent,
+          settings,
+          performanceGuidance,
+          strategyGuidance,
+        });
+        const existingNames = new Set(
+          (draft.categories || []).map((category: any) =>
+            String(category?.name || "").trim().toLowerCase(),
+          ),
+        );
+        for (const category of categoryResult.draft?.categories || []) {
+          const key = String(category?.name || "").trim().toLowerCase();
+          if (!key || existingNames.has(key)) continue;
+          existingNames.add(key);
+          draft.categories.push(category);
+        }
+        sources = mergeSources(sources, categoryResult.sources || []);
+        stageCalls += 1;
+        await saveWeeklyPlanningProgress({
+          runKey,
+          weekStart,
+          mode: "automatic",
+          settings,
+          draft,
+          sources,
+          status: "running",
+        });
+        completedCategoryCount = (draft.categories || []).filter(
+          (category: any) =>
+            !category?.planningSkipped &&
+            Array.isArray(category.keywords) &&
+            category.keywords.length > 0,
+        ).length;
+      }
       if (completedCategoryCount >= Number(settings.categoryCount)) {
         for (const category of draft.categories || []) {
           if (
