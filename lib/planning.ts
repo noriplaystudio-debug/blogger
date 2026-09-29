@@ -179,11 +179,7 @@ function curatePlan(plan: any, settings: PlanningSettings) {
                 score(keyword.scores?.uniqueValue, "keyword.uniqueValue") >=
                   55 &&
                 score(keyword.scores?.topicalFit, "keyword.topicalFit") >= 70 &&
-                (sourceDomains.size >= 2 ||
-                  (Array.isArray(keyword.verifiedClaims) &&
-                    keyword.verifiedClaims.some(
-                      (claim: any) => claim?.sourceType === "primary",
-                    ))) &&
+                sourceDomains.size >= 1 &&
                 keyword.confidence !== "낮음"
               : keyword.priorityScore >= 62 &&
                 score(keyword.scores?.durability, "keyword.durability") >= 50 &&
@@ -192,11 +188,7 @@ function curatePlan(plan: any, settings: PlanningSettings) {
                 score(keyword.scores?.uniqueValue, "keyword.uniqueValue") >=
                   60 &&
                 score(keyword.scores?.topicalFit, "keyword.topicalFit") >= 70 &&
-                (sourceDomains.size >= 2 ||
-                  (Array.isArray(keyword.verifiedClaims) &&
-                    keyword.verifiedClaims.some(
-                      (claim: any) => claim?.sourceType === "primary",
-                    ))) &&
+                sourceDomains.size >= 1 &&
                 keyword.confidence !== "낮음";
           const overlaps = usedKeywords.some(
             (used) => phraseSimilarity(used, keyword.keyword || "") >= 0.72,
@@ -207,8 +199,8 @@ function curatePlan(plan: any, settings: PlanningSettings) {
               name: keyword.keyword || "이름 없음",
               reason: overlaps
                 ? "기존 선정 키워드와 검색 의도가 지나치게 유사함"
-                : sourceDomains.size < 2
-                  ? "작성 전 교차검증에 필요한 서로 다른 출처 2곳을 확보하지 못함"
+                : sourceDomains.size < 1
+                  ? "키워드 선정에 사용할 공개 관심 신호 링크를 확보하지 못함"
                   : contentMode === "realtime"
                     ? "실시간 수요·상승세·출처·독창 가치 기준 미달"
                     : "수요·지속성·출처·독창 가치 품질 기준 미달",
@@ -353,14 +345,8 @@ export function validatePlan(
       !evidenceDomains(category.evidence).size
     )
       throw new Error(`${category.name}: 확인 가능한 근거 링크가 없습니다.`);
-    if (
-      category.trend === "상승" &&
-      category.confidence === "높음" &&
-      evidenceDomains(category.evidence).size < 2
-    )
-      throw new Error(
-        `${category.name}: 상승·높음 판정에는 서로 다른 출처 2개가 필요합니다.`,
-      );
+    // Planning uses public-interest signals, not publication-grade factual evidence.
+    // Publication-grade source checks happen again during article production.
     if (
       !Array.isArray(category.keywords) ||
       !category.keywords.length ||
@@ -411,9 +397,9 @@ export function validatePlan(
         throw new Error(
           `${keyword.keyword}: 글 방향이 정확히 ${settings.articlesPerKeyword}개가 아닙니다.`,
         );
-      if (evidenceDomains(keyword.evidence).size < 2)
+      if (evidenceDomains(keyword.evidence).size < 1)
         throw new Error(
-          `${keyword.keyword}: 첫 작성 성공률을 위해 서로 다른 근거 도메인 2개가 필요합니다.`,
+          `${keyword.keyword}: 키워드 선정에 사용한 공개 관심 신호 링크가 없습니다.`,
         );
       const angleNames = keyword.angles.map((angle: any) =>
         normalized(angle?.titleIdea || ""),
@@ -457,14 +443,8 @@ export function validatePlan(
         throw new Error(
           `${keyword.keyword}: 확인 가능한 근거 링크가 없습니다.`,
         );
-      if (
-        keyword.trend === "상승" &&
-        keyword.confidence === "높음" &&
-        domains.size < 2
-      )
-        throw new Error(
-          `${keyword.keyword}: 상승·높음 판정에는 서로 다른 출처 2개가 필요합니다.`,
-        );
+      // One traceable planning signal is enough here; factual claims are verified
+      // independently again before drafting and before publication.
     }
   }
   return plan;
@@ -700,12 +680,12 @@ export async function createKeywordStage(
 
 카테고리가 realtime이면 짧은 유효기간 때문에 제외하지 말고 수요·상승세·공식 출처·광고 안전성으로 평가한다. freshnessWindowHours는 6·24·72·168 중 하나로 정하고 eventDate와 현재 sourceCheckedAt을 기록한다. 행사·경기·시상식이 아직 끝나지 않았다면 수상작·우승·최종 결과·최종 순위처럼 미래 사실을 전제한 키워드를 선정하지 말고 일정·후보·현재 순위·관전 포인트처럼 현재 확인 가능한 질문으로 자동 전환한다. evergreen이면 반복 검색 가능성과 실행 가치를 우선한다.
 
-각 키워드는 서로 다른 도메인의 실제 원문 URL 2개 이상을 evidence에 넣고 가능하면 1차 자료를 포함한다. URL만 수집하지 말고 실제 원문을 열어 글에 사용할 수 있는 검증 주장 3개 이상을 verifiedClaims에 넣는다. 각 주장은 실제로 연 원문 URL, 출처 유형, 현재성, 적용 한계를 포함해야 한다. 공식 원문 한 곳이 핵심 내용을 모두 제공하면 단일 도메인도 허용하지만 sourceType은 primary여야 한다. 루머·사생활·피해자 신상·자극적 추측·확인되지 않은 책임 단정은 제외한다. 검색량·CPC 숫자를 추정하지 않는다.
+이 단계의 목적은 '글의 사실 근거를 완성하는 것'이 아니라 '이번 주에 쓸 만한 검색 수요·관심 신호를 고르는 것'이다. 각 키워드는 Google Trends·자동완성·관련 검색·최근 보도량·공식 일정 등 공개 관심 신호를 evidence에 최소 1개 넣는다. 서로 다른 신호가 2개 이상이면 더 좋지만 필수는 아니다. 글에 들어갈 사실·수치·조건의 교차검증은 글 작성 단계에서 별도로 다시 수행하므로 여기서 verifiedClaims를 확보하지 못했다는 이유로 키워드를 탈락시키지 않는다. 루머·사생활·피해자 신상·자극적 추측·확인되지 않은 책임 단정은 제외한다. 검색량·CPC 숫자를 추정하지 않는다.
 
 최근 사용 키워드(최근 80개): ${JSON.stringify((input.recentKeywords || []).slice(0, 80))}
 최근 콘텐츠(최근 100개 요약): ${JSON.stringify((input.recentContent || []).slice(0, 100)).slice(0, 7000)}
 
-JSON만 출력한다: {"keywords":[{"keyword":"구체적 검색어","contentMode":"${category.contentMode}","freshnessWindowHours":24,"eventDate":"YYYY-MM-DD 또는 해당 없음","sourceCheckedAt":"ISO-8601 시각","intent":"정보형|비교형|문제해결형|구매형","clusterRole":"기둥글|하위질문|비교|실행|문제해결","trend":"상승|보합|판단보류","confidence":"높음|중간","scores":{"demand":0,"momentum":0,"durability":0,"competitionOpportunity":0,"sourceability":0,"uniqueValue":0,"topicalFit":0},"reason":"근거와 한계","directAnswer":"현재 근거로 가능한 직접 답","evidence":[{"signal":"관찰 신호","period":"1시간|24시간|7일|30일|12개월","url":"https://..."}],"verifiedClaims":[{"id":"C1","statement":"검증된 한 가지 주장","sourceUrl":"https://실제로-연-원문","sourceTitle":"출처명","sourceType":"primary|authoritative_secondary","timeSensitivity":"stable|changing","limitation":"적용 조건·예외 또는 없음"}],"practicalSteps":["독자가 실행할 단계"],"uniqueValuePlan":["비교표·계산·절차·예외 구성"]}]}`,
+JSON만 출력한다: {"keywords":[{"keyword":"구체적 검색어","contentMode":"${category.contentMode}","freshnessWindowHours":24,"eventDate":"YYYY-MM-DD 또는 해당 없음","sourceCheckedAt":"ISO-8601 시각","intent":"정보형|비교형|문제해결형|구매형","clusterRole":"기둥글|하위질문|비교|실행|문제해결","trend":"상승|보합|판단보류","confidence":"높음|중간","scores":{"demand":0,"momentum":0,"durability":0,"competitionOpportunity":0,"sourceability":0,"uniqueValue":0,"topicalFit":0},"reason":"왜 이번 주에 다룰 가치가 있는지","evidence":[{"signal":"공개 관심 신호","period":"1시간|24시간|7일|30일|12개월","url":"https://..."}]}]}`,
   });
   const value = parseJson<any>(response.output_text);
   if (!Array.isArray(value?.keywords) || !value.keywords.length)
@@ -719,32 +699,31 @@ JSON만 출력한다: {"keywords":[{"keyword":"구체적 검색어","contentMode
     seen.add(key);
     keyword.contentMode = category.contentMode;
     keyword.angles = [];
-    const claimsValid = validPreflightClaims(
-      keyword.verifiedClaims,
-      openedSources,
-    );
-    const hasPrimaryClaim =
-      Array.isArray(keyword.verifiedClaims) &&
-      keyword.verifiedClaims.some(
-        (claim: any) => claim?.sourceType === "primary",
-      );
-    const evidenceValid =
-      evidenceDomains(keyword.evidence).size >= 2 || hasPrimaryClaim;
-    if (!claimsValid || !evidenceValid) continue;
-    if (!String(keyword.directAnswer || "").trim()) continue;
-    if (!Array.isArray(keyword.uniqueValuePlan) || !keyword.uniqueValuePlan.length)
-      continue;
+    let scoresValid = true;
+    try {
+      for (const scoreName of [
+        "demand",
+        "momentum",
+        "durability",
+        "competitionOpportunity",
+        "sourceability",
+        "uniqueValue",
+        "topicalFit",
+      ])
+        score(keyword.scores?.[scoreName], `${keyword.keyword}.${scoreName}`);
+    } catch {
+      scoresValid = false;
+    }
+    if (!scoresValid || evidenceDomains(keyword.evidence).size < 1) continue;
     if (
       category.contentMode === "realtime" &&
       (![6, 24, 72, 168].includes(Number(keyword.freshnessWindowHours)) ||
         !Number.isFinite(Date.parse(keyword.sourceCheckedAt || "")))
     )
       continue;
-    const usedDomains = new Set(
-      keyword.verifiedClaims.map((claim: any) => urlDomain(claim.sourceUrl)),
-    );
+    const planningDomains = evidenceDomains(keyword.evidence);
     keyword.verifiedSources = openedSources.filter((source: any) =>
-      usedDomains.has(urlDomain(source?.url)),
+      planningDomains.has(urlDomain(source?.url)),
     );
     eligible.push(keyword);
   }
@@ -786,9 +765,9 @@ export async function createAngleStage(
 
 각 글은 독자 상황·검색 질문·답변 약속·구성·고유 가치가 실제로 달라야 한다. 제목만 바꾼 중복 글을 만들지 않는다. realtime이면 확인 기준일·다음 일정·공식 재확인 경로를 mustCover에 포함하고 루머나 추측을 제외한다. eventDate가 현재보다 뒤이거나 행사가 진행 중이면 확정되지 않은 수상작·우승·최종 결과를 약속하지 말고 일정·후보·현재까지의 결과로 제목과 답변 약속을 바꾼다. 근거로 답할 수 없는 방향은 만들지 않는다.
 
-각 글 방향의 mustCover는 verifiedClaims로 실제 답할 수 있는 내용만 선택한다. evidenceCoverage에는 mustCover 문구를 그대로 반복하고 이를 뒷받침하는 claimIds를 연결한다. 연결할 수 없는 방향은 출력하지 않는다.
+이 단계는 글의 구성과 독자 질문을 설계하는 단계다. 사실 근거의 최종 확보 여부로 글 방향을 탈락시키지 않는다. mustCover에는 독자가 반드시 알고 싶어 할 질문·비교 기준·절차·주의점을 넣고, 실제 사실·수치·조건은 글 작성 단계에서 웹 검색으로 다시 검증한다.
 
-JSON만 출력한다: {"angles":[{"titleIdea":"과장 없는 제목 방향","purpose":"다른 글과의 차별화","searchQuestion":"독자의 구체적 질문","readerSituation":"이 답이 필요한 상황","answerPromise":"읽고 나면 할 수 있는 판단 또는 행동","mustCover":["필수 답 1","필수 답 2","필수 답 3"],"evidenceCoverage":[{"requirement":"필수 답 1","claimIds":["C1"]}],"exclusions":["다루지 않을 범위"],"uniqueValue":"기준표·계산·절차·예외 등 고유 가치"}]}`,
+JSON만 출력한다: {"angles":[{"titleIdea":"과장 없는 제목 방향","purpose":"다른 글과의 차별화","searchQuestion":"독자의 구체적 질문","readerSituation":"이 답이 필요한 상황","answerPromise":"읽고 나면 할 수 있는 판단 또는 행동","mustCover":["필수 질문·확인 항목 1","필수 질문·확인 항목 2","필수 질문·확인 항목 3"],"exclusions":["다루지 않을 범위"],"uniqueValue":"기준표·계산·절차·예외 등 고유 가치"}]}`,
   });
   let candidates: any[] = [];
   try {
@@ -877,19 +856,12 @@ JSON만 출력한다: {"angles":[{"titleIdea":"과장 없는 제목 방향","pur
     for (const item of fallback.mustCover)
       if (mustCover.length < 3 && !mustCover.includes(item))
         mustCover.push(item);
-    const rawCoverage = Array.isArray(candidate.evidenceCoverage)
-      ? candidate.evidenceCoverage
-      : [];
-    const coverage = mustCover.map((requirement: string) => {
-      const item = rawCoverage.find(
-        (entry: any) => normalized(entry?.requirement || "") === normalized(requirement),
-      );
-      const claimIds = Array.isArray(item?.claimIds)
-        ? item.claimIds.map(String).filter((id: string) => verifiedClaimIds.has(id))
-        : [];
-      return { requirement, supported: claimIds.length > 0, claimIds, gap: claimIds.length ? "없음" : "근거 연결 없음" };
-    });
-    if (coverage.some((item: any) => !item.supported)) continue;
+    const coverage = mustCover.map((requirement: string) => ({
+      requirement,
+      supported: false,
+      claimIds: [],
+      gap: "글 작성 단계에서 근거 재확인",
+    }));
     angles.push({
       titleIdea: String(candidate.titleIdea).trim(),
       purpose: String(candidate.purpose || fallback.purpose).trim(),
@@ -906,36 +878,56 @@ JSON만 출력한다: {"angles":[{"titleIdea":"과장 없는 제목 방향","pur
         ? candidate.exclusions.map(String).filter(Boolean).slice(0, 8)
         : ["공식 근거로 확인되지 않은 추측과 개인 경험 일반화"],
       uniqueValue: String(candidate.uniqueValue || fallback.value).trim(),
-      prevalidatedDossier: {
-        checkedAt: input.keyword.sourceCheckedAt || new Date().toISOString(),
-        readerNeed: String(candidate.searchQuestion || fallback.question).trim(),
-        directAnswer: String(input.keyword.directAnswer).trim(),
-        scope: `${input.category.name} · ${input.keyword.keyword}`,
-        claims: verifiedClaims,
-        conflicts: [],
-        unknowns: [],
-        coverage,
-        practicalSteps: Array.isArray(input.keyword.practicalSteps) ? input.keyword.practicalSteps : [],
-        uniqueValuePlan: Array.isArray(input.keyword.uniqueValuePlan) ? input.keyword.uniqueValuePlan : [String(candidate.uniqueValue || fallback.value)],
-      },
-      prevalidatedSources: input.keyword.verifiedSources || [],
+      ...(verifiedClaims.length >= 2
+        ? {
+            prevalidatedDossier: {
+              checkedAt:
+                input.keyword.sourceCheckedAt || new Date().toISOString(),
+              readerNeed: String(
+                candidate.searchQuestion || fallback.question,
+              ).trim(),
+              directAnswer: String(input.keyword.directAnswer || "").trim(),
+              scope: `${input.category.name} · ${input.keyword.keyword}`,
+              claims: verifiedClaims,
+              conflicts: [],
+              unknowns: [],
+              coverage,
+              practicalSteps: Array.isArray(input.keyword.practicalSteps)
+                ? input.keyword.practicalSteps
+                : [],
+              uniqueValuePlan: Array.isArray(input.keyword.uniqueValuePlan)
+                ? input.keyword.uniqueValuePlan
+                : [String(candidate.uniqueValue || fallback.value)],
+            },
+            prevalidatedSources: input.keyword.verifiedSources || [],
+          }
+        : {}),
     });
   }
   for (const fallback of fallbackAngles) {
     if (angles.length >= settings.articlesPerKeyword) break;
-    if (verifiedClaims.length < 2) break;
+
     let titleIdea = `${keyword}: ${fallback.suffix}`;
     if (names.has(normalized(titleIdea)))
       titleIdea = `${titleIdea} ${angles.length + 1}`;
     names.add(normalized(titleIdea));
-    const mustCover = verifiedClaims
-      .slice(0, Math.min(3, verifiedClaims.length))
-      .map((claim: any) => claim.statement);
+    const mustCover =
+      verifiedClaims.length >= 2
+        ? verifiedClaims
+            .slice(0, Math.min(3, verifiedClaims.length))
+            .map((claim: any) => claim.statement)
+        : fallback.mustCover;
     const coverage = mustCover.map((requirement: string, index: number) => ({
       requirement,
-      supported: true,
-      claimIds: [String(verifiedClaims[index].id)],
-      gap: "없음",
+      supported: verifiedClaims.length >= 2 && index < verifiedClaims.length,
+      claimIds:
+        verifiedClaims.length >= 2 && index < verifiedClaims.length
+          ? [String(verifiedClaims[index].id)]
+          : [],
+      gap:
+        verifiedClaims.length >= 2 && index < verifiedClaims.length
+          ? "없음"
+          : "글 작성 단계에서 근거 재확인",
     }));
     angles.push({
       titleIdea,
@@ -947,19 +939,28 @@ JSON만 출력한다: {"angles":[{"titleIdea":"과장 없는 제목 방향","pur
       evidenceCoverage: coverage,
       exclusions: ["공식 근거로 확인되지 않은 추측과 개인 경험 일반화"],
       uniqueValue: fallback.value,
-      prevalidatedDossier: {
-        checkedAt: input.keyword.sourceCheckedAt || new Date().toISOString(),
-        readerNeed: fallback.question,
-        directAnswer: String(input.keyword.directAnswer).trim(),
-        scope: `${input.category.name} · ${input.keyword.keyword}`,
-        claims: verifiedClaims,
-        conflicts: [],
-        unknowns: [],
-        coverage,
-        practicalSteps: Array.isArray(input.keyword.practicalSteps) ? input.keyword.practicalSteps : [],
-        uniqueValuePlan: Array.isArray(input.keyword.uniqueValuePlan) ? input.keyword.uniqueValuePlan : [fallback.value],
-      },
-      prevalidatedSources: input.keyword.verifiedSources || [],
+      ...(verifiedClaims.length >= 2
+        ? {
+            prevalidatedDossier: {
+              checkedAt:
+                input.keyword.sourceCheckedAt || new Date().toISOString(),
+              readerNeed: fallback.question,
+              directAnswer: String(input.keyword.directAnswer || "").trim(),
+              scope: `${input.category.name} · ${input.keyword.keyword}`,
+              claims: verifiedClaims,
+              conflicts: [],
+              unknowns: [],
+              coverage,
+              practicalSteps: Array.isArray(input.keyword.practicalSteps)
+                ? input.keyword.practicalSteps
+                : [],
+              uniqueValuePlan: Array.isArray(input.keyword.uniqueValuePlan)
+                ? input.keyword.uniqueValuePlan
+                : [fallback.value],
+            },
+            prevalidatedSources: input.keyword.verifiedSources || [],
+          }
+        : {}),
     });
   }
   return {
