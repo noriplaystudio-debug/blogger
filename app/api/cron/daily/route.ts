@@ -1,5 +1,6 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { assertCron } from "@/lib/cron";
+import { resolveBloggerBlogIdByName } from "@/lib/google";
 import {
   acquireAutomationLock,
   claimDueJobs,
@@ -19,14 +20,18 @@ import {
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
-async function dispatchWorkers(req: NextRequest, ids: string[]) {
+async function dispatchWorkers(
+  req: NextRequest,
+  ids: string[],
+  blogId: string,
+) {
   const secret = process.env.CRON_SECRET;
   if (!secret) throw new Error("CRON_SECRET이 없습니다.");
   const origin = new URL(req.url).origin;
   await Promise.allSettled(
     ids.map((jobId) =>
       fetch(
-        `${origin}/api/cron/article-worker?jobId=${encodeURIComponent(jobId)}`,
+        `${origin}/api/cron/article-worker?jobId=${encodeURIComponent(jobId)}&blogId=${encodeURIComponent(blogId)}`,
         {
           method: "POST",
           headers: { Authorization: `Bearer ${secret}` },
@@ -114,6 +119,12 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    const primaryBlogName =
+      process.env.PRIMARY_BLOGGER_NAME?.trim() || "장학짱";
+    // Resolve Blogger once before claiming jobs. If OAuth/blog lookup is broken,
+    // leave the queue untouched instead of failing seven article workers.
+    const targetBlogId = await resolveBloggerBlogIdByName(primaryBlogName);
+
     const readyJobs = await claimReadyDraftJobs(remaining);
     const remainingAfterReady = Math.max(0, remaining - readyJobs.length);
     const productionJobs =
@@ -143,7 +154,7 @@ export async function GET(req: NextRequest) {
 
     if (jobIds.length) {
       after(async () => {
-        await dispatchWorkers(req, jobIds);
+        await dispatchWorkers(req, jobIds, targetBlogId);
       });
     }
 
