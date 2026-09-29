@@ -1112,6 +1112,65 @@ export default function Home() {
 
   async function createPlan() {
     setMessage("");
+
+    // In production, start the planner in the background and poll short status
+    // requests. This avoids mobile browsers dropping a long OpenAI request.
+    if (automation.configured) {
+      setBusy("주간 계획 백그라운드 시작 중");
+      try {
+        const startedResponse = await fetch("/api/automation/weekly-start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(workflow),
+        });
+        const started = await readApiJson(startedResponse);
+        if (!startedResponse.ok)
+          throw new Error(started.error || "주간 계획을 시작하지 못했습니다.");
+
+        setMessage(
+          "주간 계획을 서버에서 계속 생성 중입니다. 이 화면을 닫거나 이동해도 작업은 계속됩니다.",
+        );
+
+        const runKey = String(started.runKey || "");
+        const startedAt = Date.now();
+        while (Date.now() - startedAt < 20 * 60 * 1000) {
+          await new Promise((resolve) => setTimeout(resolve, 2500));
+          const progressResponse = await fetch(
+            `/api/automation/weekly-progress?runKey=${encodeURIComponent(runKey)}`,
+            { cache: "no-store" },
+          );
+          const progress = await readApiJson(progressResponse);
+          if (!progressResponse.ok)
+            throw new Error(progress.error || "주간 계획 상태 조회에 실패했습니다.");
+
+          setBusy(
+            progress.status === "ready"
+              ? "주간 계획 저장 완료"
+              : `주간 계획 생성 중 · 카테고리 ${progress.categoryCount} · 키워드 ${progress.keywordCount} · 글 방향 ${progress.completedAngles}/${progress.expectedAngles}`,
+          );
+
+          if (progress.status === "failed")
+            throw new Error(progress.error || "주간 계획 생성에 실패했습니다.");
+
+          if (progress.status === "ready") {
+            await refreshAutomationStatus(true);
+            setMessage(
+              `주간 계획 생성이 완료됐습니다. 카테고리 ${progress.categoryCount}개 · 키워드 ${progress.keywordCount}개를 저장했습니다.`,
+            );
+            return;
+          }
+        }
+        setMessage(
+          "주간 계획은 서버에서 계속 진행 중입니다. 잠시 후 새로고침하면 진행 상태를 다시 확인할 수 있습니다.",
+        );
+        return;
+      } catch (error: any) {
+        setMessage(error?.message || "주간 계획 백그라운드 실행에 실패했습니다.");
+        return;
+      } finally {
+        setBusy("");
+      }
+    }
     const signature = workflowSignature(workflow);
     const history = {
       categories: plan?.categories.map((category) => category.name) || [],
