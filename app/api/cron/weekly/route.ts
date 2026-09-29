@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { assertCron } from "@/lib/cron";
 import {
   createAngleStage,
@@ -28,7 +28,7 @@ import {
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
-const MAX_STAGE_CALLS_PER_INVOCATION = 4;
+const MAX_STAGE_CALLS_PER_INVOCATION = 1;
 
 function mergeSources(left: any[] = [], right: any[] = []) {
   return [
@@ -61,6 +61,19 @@ function plannedArticleCapacity(draft: any, settings: any) {
           ),
       0,
     );
+}
+
+function queueWeeklyContinuation(req: NextRequest) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return;
+  const origin = new URL(req.url).origin;
+  after(async () => {
+    await fetch(`${origin}/api/cron/weekly`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${secret}` },
+      cache: "no-store",
+    }).catch(() => {});
+  });
 }
 
 function sameSettings(left: any, right: any) {
@@ -378,7 +391,13 @@ export async function GET(req: NextRequest) {
         status: "saved-for-resume",
       };
       if (runId) await finishRun(runId, "partial", detail);
-      return NextResponse.json({ ok: true, partial: true, ...detail });
+      queueWeeklyContinuation(req);
+      return NextResponse.json({
+        ok: true,
+        partial: true,
+        continuationQueued: true,
+        ...detail,
+      });
     }
 
     const finalDraft = {
