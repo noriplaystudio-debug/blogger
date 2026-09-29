@@ -58,8 +58,12 @@ export async function POST(req: NextRequest) {
 
     runId = await startRun("article-worker");
     const config = await getAutomationConfig();
+    const suppliedBlogId = String(
+      req.nextUrl.searchParams.get("blogId") || "",
+    ).trim();
     const primaryBlogName = process.env.PRIMARY_BLOGGER_NAME?.trim() || "장학짱";
-    const targetBlogId = await resolveBloggerBlogIdByName(primaryBlogName);
+    const targetBlogId =
+      suppliedBlogId || (await resolveBloggerBlogIdByName(primaryBlogName));
 
     let article = job.article || null;
     if (article?.status !== "ready") {
