@@ -724,6 +724,54 @@ export async function getJobPublicationContext(id: string) {
     : null;
 }
 
+export async function recoverStaleArticleJobs(minutes = 15) {
+  await ensureSchema();
+  const safeMinutes = Math.max(10, Math.min(Number(minutes) || 15, 60));
+  const rows = await db()`UPDATE article_jobs
+    SET state = CASE
+      WHEN article IS NOT NULL AND article->>'status'='ready' THEN 'ready'
+      WHEN article IS NOT NULL AND article->>'status'='needs_review' THEN 'needs_review'
+      ELSE 'waiting'
+    END,
+    attempts=GREATEST(attempts-1, 0),
+    error='이전 서버 실행이 중단되어 자동 복구 후 다시 대기열에 넣었습니다.',
+    updated_at=now()
+    WHERE state='working'
+      AND updated_at < now() - (${safeMinutes}::text || ' minutes')::interval
+    RETURNING id`;
+  return rows.map((row) => String(row.id));
+}
+
+export async function finishStaleAutomationRuns(minutes = 15) {
+  await ensureSchema();
+  const safeMinutes = Math.max(10, Math.min(Number(minutes) || 15, 120));
+  const rows = await db()`UPDATE automation_runs
+    SET status='failed',
+        detail=COALESCE(detail, '{}'::jsonb) ||
+          jsonb_build_object('error','서버 실행 제한으로 종료되어 다음 실행에서 복구됩니다.'),
+        finished_at=now()
+    WHERE status='running'
+      AND started_at < now() - (${safeMinutes}::text || ' minutes')::interval
+    RETURNING id`;
+  return rows.length;
+}
+
+export async function getArticleJobById(id: string) {
+  await ensureSchema();
+  const [row] = await db()`SELECT * FROM article_jobs WHERE id=${id} LIMIT 1`;
+  return row || null;
+}
+
+export async function getTodayPublishedCount() {
+  await ensureSchema();
+  const today = koreaDate();
+  const [row] = await db()`SELECT count(*)::int AS count
+    FROM article_jobs
+    WHERE state='published'
+      AND (updated_at AT TIME ZONE 'Asia/Seoul')::date=${today}::date`;
+  return Number(row?.count || 0);
+}
+
 export async function claimDueJobs(limit = 7) {
   await ensureSchema();
   const today = koreaDate();
