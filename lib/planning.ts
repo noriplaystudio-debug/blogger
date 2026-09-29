@@ -451,7 +451,7 @@ export function validatePlan(
 }
 
 function validEvidence(value: any[]) {
-  return Array.isArray(value) && evidenceDomains(value).size >= 2;
+  return Array.isArray(value) && evidenceDomains(value).size >= 1;
 }
 
 function assignSharedBlogGroups(categories: any[]) {
@@ -568,7 +568,7 @@ export async function createCategoryStage(
 
 실시간이라고 배제하지 않는다. 단, 연예인 사생활·루머·확인되지 않은 열애설, 피해자 신상·잔혹 묘사·사건 자극화, 정치 선동, 고위험 의료·법률·투자 추천, 성인·도박·불법·혐오·저작권 침해는 제외한다. 연예는 공식 작품·방송·공연·차트·수상 정보, 스포츠는 공식 일정·결과·기록·규정·공개 발표, 사건은 공공기관 발표·교통·안전·서비스 변경·후속 절차처럼 검증 가능한 정보만 다룬다.
 
-Google Trends·자동완성·관련 검색어·최근 보도량·공식 자료를 교차 확인하되 자동완성 순서를 검색량으로 주장하지 않는다. 각 최종 카테고리는 서로 다른 도메인의 실제 원문 URL 2개 이상을 evidence에 넣는다. 사용자 개인 검색 기록은 사용하지 않는다.
+Google Trends·자동완성·관련 검색어·최근 보도량·공식 자료 등 공개 관심 신호를 확인하되 자동완성 순서를 검색량으로 주장하지 않는다. 각 카테고리는 선정 이유를 추적할 수 있는 실제 URL을 evidence에 최소 1개 넣고, 서로 다른 신호가 2개 이상이면 우선한다. 이 단계는 수요·관심도 선별 단계이므로 글 본문의 사실 검증 수준까지 요구하지 않는다. 사용자 개인 검색 기록은 사용하지 않는다.
 
 현재 운영 카테고리: ${JSON.stringify((context.categoryPortfolio || []).slice(0, 20))}
 최근 사용 키워드·글은 그대로 반복하지 않고 빈틈을 찾는 참고로만 쓴다: ${JSON.stringify({ keywords: (context.recentKeywords || []).slice(0, 100), content: (context.recentContent || []).slice(0, 100) }).slice(0, 10000)}
@@ -630,7 +630,7 @@ JSON만 출력한다: {"weekLabel":"YYYY-MM-DD 시작 주간","marketSummary":"�
   );
   if (!selectedCategories.length)
     throw new Error(
-      "독립 근거 출처 2곳 이상을 확보한 카테고리가 없습니다. 다음 실행에서 후보를 다시 조사합니다.",
+      "공개 관심 신호를 확인할 수 있는 카테고리가 없습니다. 다음 실행에서 후보를 다시 조사합니다.",
     );
   if (
     !selectedCategories.some(
@@ -638,7 +638,7 @@ JSON만 출력한다: {"weekLabel":"YYYY-MM-DD 시작 주간","marketSummary":"�
     )
   )
     throw new Error(
-      "독립 근거를 확보한 실시간 관심 카테고리가 없습니다. 다음 실행에서 실시간 후보를 다시 조사합니다.",
+      "확인 가능한 공개 관심 신호가 있는 실시간 카테고리가 없습니다. 다음 실행에서 후보를 다시 조사합니다.",
     );
   value.categories = selectedCategories;
   assignSharedBlogGroups(value.categories);
