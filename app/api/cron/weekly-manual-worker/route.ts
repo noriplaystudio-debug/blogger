@@ -243,7 +243,9 @@ export async function POST(req: NextRequest) {
         if (keyword?.planningSkipped) continue;
         if (
           !Array.isArray(keyword.angles) ||
-          keyword.angles.length !== Number(settings.articlesPerKeyword)
+          keyword.angles.length !== Number(
+              keyword.articleCountOverride || settings.articlesPerKeyword,
+            )
         ) {
           const result = await createAngleStage(process.env.OPENAI_API_KEY, {
             category,
