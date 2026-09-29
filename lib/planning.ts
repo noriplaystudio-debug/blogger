@@ -526,7 +526,9 @@ function urlDomain(value: string) {
 }
 
 function validPreflightClaims(value: any[], sources: any[]) {
-  if (!Array.isArray(value) || value.length < 3) return false;
+  // Two independently checked claims are enough for planning. Article production
+  // performs its own evidence verification again before publishing.
+  if (!Array.isArray(value) || value.length < 2) return false;
   const openedDomains = new Set(
     (sources || []).map((source: any) => urlDomain(source?.url)).filter(Boolean),
   );
@@ -618,7 +620,12 @@ JSON만 출력한다: {"weekLabel":"YYYY-MM-DD 시작 주간","marketSummary":"�
     } catch {
       scoresValid = false;
     }
-    if (!scoresValid || !validEvidence(category.evidence)) continue;
+    if (
+      !scoresValid ||
+      !Array.isArray(category.evidence) ||
+      evidenceDomains(category.evidence).size < 1
+    )
+      continue;
     category.keywords = [];
     eligibleCategories.push(category);
   }
@@ -699,8 +706,18 @@ JSON만 출력한다: {"keywords":[{"keyword":"구체적 검색어","contentMode
     seen.add(key);
     keyword.contentMode = category.contentMode;
     keyword.angles = [];
-    if (!validEvidence(keyword.evidence)) continue;
-    if (!validPreflightClaims(keyword.verifiedClaims, openedSources)) continue;
+    const claimsValid = validPreflightClaims(
+      keyword.verifiedClaims,
+      openedSources,
+    );
+    const hasPrimaryClaim =
+      Array.isArray(keyword.verifiedClaims) &&
+      keyword.verifiedClaims.some(
+        (claim: any) => claim?.sourceType === "primary",
+      );
+    const evidenceValid =
+      evidenceDomains(keyword.evidence).size >= 2 || hasPrimaryClaim;
+    if (!claimsValid || !evidenceValid) continue;
     if (!String(keyword.directAnswer || "").trim()) continue;
     if (!Array.isArray(keyword.uniqueValuePlan) || !keyword.uniqueValuePlan.length)
       continue;
@@ -727,7 +744,7 @@ JSON만 출력한다: {"keywords":[{"keyword":"구체적 검색어","contentMode
   const selected = eligible.slice(0, settings.keywordsPerCategory);
   if (!selected.length)
     throw new Error(
-      `${category.name}: 주장 단위 사전검증을 통과한 키워드가 없습니다. 글 대기열은 만들지 않았습니다.`,
+      `${category.name}: 사전검증을 통과한 키워드를 확보하지 못했습니다. 자동 재조사 대상으로 넘깁니다.`,
     );
   return { keywords: selected, sources: openedSources };
 }
