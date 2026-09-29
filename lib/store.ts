@@ -537,6 +537,19 @@ export async function getWorkspace() {
   };
 }
 
+export async function getCurrentWeekPlan() {
+  await ensureSchema();
+  const weekStart = mondayOfKoreaWeek();
+  const [row] =
+    await db()`SELECT week_start, payload, sources FROM weekly_plans WHERE week_start=${weekStart} LIMIT 1`;
+  if (!row) return null;
+  return {
+    weekStart,
+    plan: row.payload || null,
+    sources: row.sources || [],
+  };
+}
+
 export async function savePlanningSearchSnapshot(input: {
   settings: any;
   rawResponse: string;
