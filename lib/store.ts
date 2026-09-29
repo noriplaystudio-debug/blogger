@@ -607,6 +607,36 @@ export async function getPlanningSearchSnapshot() {
   };
 }
 
+export async function getLatestRunningWeeklyPlanningProgress(
+  mode: "manual" | "automatic" = "manual",
+) {
+  await ensureSchema();
+  const [row] = await db()`SELECT run_key, week_start, mode, settings, draft, sources, status, error, failures, created_at, updated_at
+    FROM weekly_planning_runs
+    WHERE mode=${mode} AND status='running'
+    ORDER BY updated_at DESC
+    LIMIT 1`;
+  if (!row) return null;
+  return {
+    runKey: row.run_key as string,
+    weekStart:
+      row.week_start instanceof Date
+        ? row.week_start.toISOString().slice(0, 10)
+        : String(row.week_start).slice(0, 10),
+    mode: row.mode as string,
+    settings: row.settings || {},
+    draft: row.draft || null,
+    sources: row.sources || [],
+    status: row.status as string,
+    error: row.error ? String(row.error) : "",
+    failures: Number(row.failures || 0),
+    createdAt:
+      row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+    updatedAt:
+      row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
+  };
+}
+
 export async function getWeeklyPlanningProgress(runKey: string) {
   await ensureSchema();
   const [row] = await db()`SELECT run_key, week_start, mode, settings, draft, sources, status, error, failures, created_at, updated_at
