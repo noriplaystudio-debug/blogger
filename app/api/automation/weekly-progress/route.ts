@@ -46,6 +46,27 @@ export async function GET(req: NextRequest) {
         ).length,
       0,
     );
+    const articleCapacity = activeCategories.reduce(
+      (sum: number, category: any) =>
+        sum +
+        (category.keywords || [])
+          .filter((keyword: any) => !keyword?.planningSkipped)
+          .reduce(
+            (keywordSum: number, keyword: any) =>
+              keywordSum +
+              (Array.isArray(keyword.angles) && keyword.angles.length
+                ? keyword.angles.length
+                : Number(
+                    keyword.articleCountOverride ||
+                      progress.settings?.articlesPerKeyword ||
+                      0,
+                  )),
+            0,
+          ),
+      0,
+    );
+    const weeklyArticleTarget =
+      Number(progress.settings?.dailyArticleLimit || 0) * 7;
     const targetCategoryCount = Number(progress.settings?.categoryCount || 0);
     const targetKeywordCount =
       targetCategoryCount * Number(progress.settings?.keywordsPerCategory || 0);
@@ -61,6 +82,9 @@ export async function GET(req: NextRequest) {
       targetKeywordCount,
       completedAngles,
       expectedAngles: keywordCount || targetKeywordCount,
+      articleCapacity,
+      weeklyArticleTarget,
+      articleDeficit: Math.max(0, weeklyArticleTarget - articleCapacity),
       skippedCategories: categories.filter((category: any) => category?.planningSkipped).length,
       updatedAt: progress.updatedAt,
       error: progress.error || "",
