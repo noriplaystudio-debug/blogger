@@ -528,7 +528,7 @@ export async function createCategoryStage(
     settings.categoryCount,
     Math.max(1, Math.ceil(settings.categoryCount * 0.4)),
   );
-  const response = await new OpenAI({ apiKey }).responses.create({
+  const response = await new OpenAI({ apiKey, timeout: 90000, maxRetries: 1 }).responses.create({
     model: process.env.RESEARCH_MODEL || "gpt-5.6-terra",
     tools: [{ type: "web_search" }],
     include: ["web_search_call.action.sources" as any],
@@ -638,7 +638,7 @@ export async function createKeywordStage(
     30,
     Math.max(settings.keywordsPerCategory * 3, settings.keywordsPerCategory + 4),
   );
-  const response = await new OpenAI({ apiKey }).responses.create({
+  const response = await new OpenAI({ apiKey, timeout: 90000, maxRetries: 1 }).responses.create({
     model: process.env.RESEARCH_MODEL || "gpt-5.6-terra",
     tools: [{ type: "web_search" }],
     include: ["web_search_call.action.sources" as any],
@@ -1009,7 +1009,7 @@ export async function createWeeklyPlan(
     sources: any[];
   }) => Promise<void>,
 ) {
-  const client = new OpenAI({ apiKey });
+  const client = new OpenAI({ apiKey, timeout: 90000, maxRetries: 1 });
   const settings = normalizePlanningSettings(context.settings);
   const totalArticles =
     settings.categoryCount *
