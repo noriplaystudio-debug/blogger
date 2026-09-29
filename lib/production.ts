@@ -1431,7 +1431,7 @@ export async function produceArticle(
         error?.message || `작성·검수 ${attempt + 1}차 실패`,
       );
       if (isSystemicProviderError(error)) throw error;
-      if (attempt === 2) {
+      if (attempt === maxGenerationAttempts - 1) {
         if (draft) {
           review = fallbackReview(
             draft,
