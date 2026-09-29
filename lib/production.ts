@@ -415,7 +415,7 @@ export class SourceBlockedError extends Error {
   constructor(reasons: string[]) {
     const clean = reasons.filter(Boolean);
     super(
-      `자동 보강 검색을 ${clean.length || 1}회 진행했지만 신뢰할 수 있는 독립 출처를 충분히 확보하지 못했습니다. ${clean.at(-1) || "주제를 더 좁혀 다시 시도하세요."}`,
+      `자동 보강 검색을 ${clean.length || 1}회 진행했지만 글의 핵심 내용을 뒷받침할 출처를 확보하지 못했습니다. ${clean.at(-1) || "주제를 더 좁혀 다시 시도하세요."}`,
     );
     this.name = "SourceBlockedError";
     this.attempts = clean.length || 1;
@@ -1021,7 +1021,8 @@ async function researchArticleEvidence(apiKey: string, body: any) {
     ? `\n이번 조사는 전체 주제를 처음부터 반복하는 조사가 아니다. 이전 검수에서 부족하다고 판정된 다음 주장만 우선 확인한다: ${JSON.stringify(body.recoveryContext).slice(0, 8000)}\n기존 조사에서 검증된 주장은 유지하고, 부족한 주장마다 새 원문 출처를 연결한다. 새 출처를 찾지 못한 주장은 unknowns에 남기고 글에서 삭제하거나 조건부 표현으로 축소한다.`
     : "";
 
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  const researchAttemptLimit = evidencePolicy.level === "strict" ? 3 : 2;
+  for (let attempt = 0; attempt < researchAttemptLimit; attempt += 1) {
     const recoveryInstruction =
       [
         "먼저 글의 필수 질문을 각각 검색하고 공식기관·원문을 중심으로 교차검증한다.",
@@ -1351,7 +1352,11 @@ export async function produceArticle(
         finalDiagnostics.passed &&
         citedSourceCount >= minimumCitations,
       );
-      if (review.passed && keys.openai) {
+      if (
+        review.passed &&
+        keys.openai &&
+        (strictEvidence || body.angle?.contentMode === "realtime")
+      ) {
         const canUsePrevalidatedAudit = Boolean(
           researchDossier &&
             body.angle?.prevalidatedDossier &&
