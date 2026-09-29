@@ -166,8 +166,8 @@ export async function POST(req: NextRequest) {
       );
 
     if (
-      completedCategoryCount >= Number(settings.categoryCount) &&
-      articleCapacity < weeklyArticleTarget &&
+      (completedCategoryCount < Number(settings.categoryCount) ||
+        articleCapacity < weeklyArticleTarget) &&
       !hasUnprocessedCandidate() &&
       activeCandidates().length < 20
     ) {
@@ -190,6 +190,7 @@ export async function POST(req: NextRequest) {
           String(category?.name || "").trim().toLowerCase(),
         ),
       );
+      let addedCategories = 0;
       for (const category of categoryResult.draft?.categories || []) {
         if (activeCandidates().length >= 20) break;
         const key = String(category?.name || "").trim().toLowerCase();
@@ -199,7 +200,11 @@ export async function POST(req: NextRequest) {
           ...category,
           supplementalCategory: true,
         });
+        addedCategories += 1;
       }
+      draft.supplementFailures = addedCategories
+        ? 0
+        : Number(draft.supplementFailures || 0) + 1;
       sources = mergeSources(sources, categoryResult.sources || []);
       await saveWeeklyPlanningProgress({
         runKey,
@@ -213,6 +218,22 @@ export async function POST(req: NextRequest) {
         failures: 0,
       });
       articleCapacity = plannedArticleCapacity(draft, settings);
+      if (
+        addedCategories === 0 &&
+        Number(draft.supplementFailures || 0) < 3
+      ) {
+        await finishRun(automationRunId, "partial", {
+          runKey,
+          phase: "supplement-categories",
+          supplementFailures: Number(draft.supplementFailures || 0),
+        });
+        await queueNext(req, runKey);
+        return NextResponse.json({
+          ok: true,
+          queued: true,
+          phase: "supplement-categories",
+        });
+      }
     }
 
     const categoryNeedingKeywords = draft.categories?.find(
