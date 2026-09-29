@@ -218,9 +218,9 @@ assert.doesNotThrow(() =>
 );
 const strictPolicy =
   productionResilienceTestHooks.determineEvidencePolicy({
-    category: "교통",
-    keyword: "KTX 일정",
-    angle: { contentMode: "realtime" },
+    category: "건강",
+    keyword: "의약품 복용 주의사항",
+    angle: { contentMode: "evergreen" },
   });
 assert.equal(strictPolicy.level, "strict");
 assert.doesNotThrow(() =>
@@ -282,7 +282,15 @@ const dailySource = readFileSync(
   new URL("../app/api/cron/daily/route.ts", import.meta.url),
   "utf8",
 );
-assert.ok(dailySource.includes("replacement_reserve_released"));
-assert.ok(dailySource.includes("completedSlots"));
+assert.ok(dailySource.includes("/api/cron/article-worker"));
+assert.ok(dailySource.includes("recoverStaleArticleJobs(15)"));
+assert.ok(dailySource.includes("getTodayPublishedCount"));
+const workerSource = readFileSync(
+  new URL("../app/api/cron/article-worker/route.ts", import.meta.url),
+  "utf8",
+);
+assert.ok(workerSource.includes("produceArticle"));
+assert.ok(workerSource.includes("publishBloggerDraft"));
+assert.ok(workerSource.includes("startRun(\"article-worker\")"));
 
 console.log("PASS  글 생성 자동 복구 회귀 검사");
