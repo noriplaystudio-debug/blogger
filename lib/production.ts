@@ -490,13 +490,33 @@ function validateResearchDossier(
     try {
       claimDomain = new URL(claim.sourceUrl).hostname.replace(/^www\./, "");
     } catch {}
+
+    if (!key && sources.length) {
+      claim.sourceUrl = sources[0].url;
+      claim.sourceTitle = claim.sourceTitle || sources[0].title;
+      claimDomain = new URL(sources[0].url).hostname.replace(/^www\./, "");
+    }
+
     // 검색 도구가 연 URL과 모델이 적은 canonical URL의 경로가 달라도
-    // 같은 공식 도메인이면 실제로 연 URL에 다시 연결한다.
-    if (key && !citationKeys.has(key) && citationsByDomain.has(claimDomain)) {
+    // 같은 도메인이면 실제로 열린 URL에 다시 연결한다.
+    if (
+      urlKey(claim.sourceUrl) &&
+      !citationKeys.has(urlKey(claim.sourceUrl)) &&
+      citationsByDomain.has(claimDomain)
+    ) {
       claim.sourceUrl = citationsByDomain.get(claimDomain)![0].url;
       claim.sourceTitle =
         claim.sourceTitle || citationsByDomain.get(claimDomain)![0].title;
     }
+
+    if (
+      policy.level !== "strict" &&
+      !["primary", "authoritative_secondary"].includes(claim.sourceType)
+    )
+      claim.sourceType = "authoritative_secondary";
+    if (!["stable", "changing"].includes(claim.timeSensitivity))
+      claim.timeSensitivity = "changing";
+
     if (
       !String(claim.statement || "").trim() ||
       !urlKey(claim.sourceUrl) ||
@@ -1245,6 +1265,47 @@ export async function produceArticle(
           generationFailures.push(
             `초안 JSON 자동 복구: ${parseError instanceof Error ? parseError.message : "형식 오류"}`,
           );
+        }
+        if (!String(parsedDraft?.title || "").trim()) {
+          parsedDraft.title =
+            String(parsedDraft?.titleCandidates?.[0]?.title || "").trim() ||
+            String(body.angle?.titleIdea || body.keyword || "정보 확인 가이드");
+        }
+        if (
+          !Array.isArray(parsedDraft?.titleCandidates) ||
+          parsedDraft.titleCandidates.length !== 4
+        ) {
+          const baseTitle = String(parsedDraft.title).trim();
+          parsedDraft.titleCandidates = [
+            {
+              title: baseTitle,
+              strategy: "direct_answer",
+              queryFit: "검색 질문에 직접 답합니다.",
+              promise: "본문의 핵심 답을 정확히 반영합니다.",
+              risk: "",
+            },
+            {
+              title: `${baseTitle} — 확인 조건과 예외`,
+              strategy: "conditional",
+              queryFit: "조건이 있는 독자 질문에 맞춥니다.",
+              promise: "조건과 예외를 함께 설명합니다.",
+              risk: "길이 확인 필요",
+            },
+            {
+              title: `${baseTitle} — 무엇이 달라지는가`,
+              strategy: "comparison",
+              queryFit: "비교 관점으로 질문을 정리합니다.",
+              promise: "차이를 설명합니다.",
+              risk: "",
+            },
+            {
+              title: `${baseTitle} — 확인 순서와 해결 방법`,
+              strategy: "problem_solution",
+              queryFit: "실행형 질문에 맞춥니다.",
+              promise: "확인 순서와 해결 방법을 제공합니다.",
+              risk: "길이 확인 필요",
+            },
+          ];
         }
         draft = validateDraft(
           parsedDraft,
