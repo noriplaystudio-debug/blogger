@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   getAutomationConfig,
   getOperationalStats,
+  getWorkspace,
   hasDatabase,
   recentAuditEvents,
   recentRuns,
@@ -51,9 +52,10 @@ export async function GET() {
     );
 
   try {
-    const [config, operational, runs, audit] = await Promise.all([
+    const [config, operational, workspace, runs, audit] = await Promise.all([
       getAutomationConfig(),
       getOperationalStats(),
+      getWorkspace(),
       recentRuns(),
       recentAuditEvents(),
     ]);
@@ -74,6 +76,40 @@ export async function GET() {
         createdAt: event.createdAt,
       }));
 
+    const planCategories = Array.isArray(workspace.plan?.categories)
+      ? workspace.plan.categories
+      : [];
+    const planKeywordCount = planCategories.reduce(
+      (sum: number, category: any) =>
+        sum + (Array.isArray(category.keywords) ? category.keywords.length : 0),
+      0,
+    );
+    const planArticleCapacity = planCategories.reduce(
+      (sum: number, category: any) =>
+        sum +
+        (Array.isArray(category.keywords)
+          ? category.keywords.reduce(
+              (keywordSum: number, keyword: any) =>
+                keywordSum +
+                (Array.isArray(keyword.angles) ? keyword.angles.length : 0),
+              0,
+            )
+          : 0),
+      0,
+    );
+    const weeklyTarget = config.dailyArticleLimit * 7;
+    const workerRuns = runs
+      .filter((run: any) => run.kind === "article-worker")
+      .slice(0, 20);
+    const workerSummary = workerRuns.reduce(
+      (acc: Record<string, number>, run: any) => {
+        const key = String(run.status || "unknown");
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+      },
+      {},
+    );
+
     const nowKst = koreaDateTimeParts();
 
     return NextResponse.json(
@@ -88,6 +124,14 @@ export async function GET() {
           primaryBlogName: process.env.PRIMARY_BLOGGER_NAME?.trim() || "장학짱",
         },
         operational,
+        weeklyPlan: {
+          categories: planCategories.length,
+          keywords: planKeywordCount,
+          articleCapacity: planArticleCapacity,
+          target: weeklyTarget,
+          deficit: Math.max(0, weeklyTarget - planArticleCapacity),
+        },
+        recentArticleWorkers: workerSummary,
         latestDailyRun: latestDaily
           ? {
               status: latestDaily.status,
