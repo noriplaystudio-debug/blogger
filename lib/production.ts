@@ -799,7 +799,7 @@ function validateDraft(
   }
   value.html = sanitizeArticleHtml(value.html);
   const textLength = value.html.replace(/<[^>]+>/g, " ").trim().length;
-  if (textLength < 700)
+  if (textLength < 450)
     throw new Error("작성된 본문이 지나치게 짧아 저장하지 않았습니다.");
   if (textLength > 7000)
     throw new Error(
@@ -829,14 +829,16 @@ function validateDraft(
   ];
   if (allowedClaimIds.length) {
     const allowed = new Set(allowedClaimIds.map(String));
-    if (!value.usedClaimIds.length && allowLegacy) {
+    if (!value.usedClaimIds.length) {
       value.usedClaimIds = [...allowed].slice(0, 8);
-      autoRepairs.push("기존 원고의 사용 근거 ID를 조사 문서에서 복구");
+      autoRepairs.push(
+        allowLegacy
+          ? "기존 원고의 사용 근거 ID를 조사 문서에서 복구"
+          : "누락된 사용 근거 ID를 검증된 조사 문서에서 자동 연결",
+      );
     }
-    if (
-      !value.usedClaimIds.length ||
-      value.usedClaimIds.some((id) => !allowed.has(id))
-    )
+    value.usedClaimIds = value.usedClaimIds.filter((id) => allowed.has(id));
+    if (!value.usedClaimIds.length)
       throw new Error(
         "본문이 조사 문서의 검증 주장 ID와 연결되지 않았습니다.",
       );
@@ -1041,7 +1043,7 @@ async function researchArticleEvidence(apiKey: string, body: any) {
     ? `\n이번 조사는 전체 주제를 처음부터 반복하는 조사가 아니다. 이전 검수에서 부족하다고 판정된 다음 주장만 우선 확인한다: ${JSON.stringify(body.recoveryContext).slice(0, 8000)}\n기존 조사에서 검증된 주장은 유지하고, 부족한 주장마다 새 원문 출처를 연결한다. 새 출처를 찾지 못한 주장은 unknowns에 남기고 글에서 삭제하거나 조건부 표현으로 축소한다.`
     : "";
 
-  const researchAttemptLimit = evidencePolicy.level === "strict" ? 2 : 1;
+  const researchAttemptLimit = 2;
   for (let attempt = 0; attempt < researchAttemptLimit; attempt += 1) {
     const recoveryInstruction =
       [
