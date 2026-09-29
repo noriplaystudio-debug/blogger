@@ -76,7 +76,9 @@ export async function GET(req: NextRequest) {
         .every(
           (category: any) =>
             Array.isArray(category.keywords) &&
-            category.keywords.length >= config.keywordsPerCategory &&
+            (category.keywords.some((keyword: any) => keyword?.singleKeywordCategory === true)
+              ? category.keywords.length >= 1
+              : category.keywords.length >= config.keywordsPerCategory) &&
             category.keywords
               .slice(0, config.keywordsPerCategory)
               .every(
