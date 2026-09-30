@@ -16,6 +16,7 @@ import {
   releaseJobClaims,
   resetGenericGenerationFailures,
   releaseAutomationLock,
+  recentRuns,
   startRun,
 } from "@/lib/store";
 
@@ -34,7 +35,7 @@ async function dispatchWorkers(
   }
   const origin = new URL(req.url).origin;
   const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim();
-  const settled = await Promise.allSettled(ids.map(async (jobId) => {
+  const dispatchOne = async (jobId: string) => {
     const response = await fetch(
       `${origin}/api/cron/article-worker?jobId=${encodeURIComponent(jobId)}&blogId=${encodeURIComponent(blogId)}`,
       {
@@ -66,7 +67,50 @@ async function dispatchWorkers(
       sourceBlocked: Boolean(body?.sourceBlocked),
       state: String(body?.state || (response.ok ? "unknown" : "error")),
     };
-  }));
+  };
+
+  // Test one production call before fanning out. Invalid credentials, empty
+  // provider balance, or another systemic error must not trigger six more
+  // billable attempts in the same daily run.
+  const first = await Promise.allSettled([dispatchOne(ids[0])]);
+  if (first[0].status === "fulfilled" && first[0].value.systemic) {
+    await releaseJobClaims(
+      ids.slice(1),
+      "앞선 글에서 API 제공자 공통 오류가 확인되어 이번 실행의 나머지 글을 비용 보호를 위해 보류했습니다.",
+    );
+    const outcome = first[0].value;
+    return {
+      dispatched: 1,
+      dispatchFailures: 0,
+      workerFailures: 1,
+      systemicFailures: 1,
+      sourceBlocked: Number(outcome.sourceBlocked),
+      workerStates: { [outcome.state]: 1 },
+      deferredAfterSystemicFailure: Math.max(0, ids.length - 1),
+      haltedForSystemicFailure: true,
+      haltedForDispatchFailure: false,
+      workerBypassConfigured: Boolean(bypassSecret),
+    };
+  }
+  if (first[0].status === "rejected") {
+    await releaseJobClaims(
+      ids,
+      "첫 작업자 호출을 전달하지 못해 나머지 작업도 비용 보호를 위해 보류했습니다.",
+    );
+    return {
+      dispatched: 0,
+      dispatchFailures: 1,
+      workerFailures: 0,
+      systemicFailures: 0,
+      sourceBlocked: 0,
+      workerStates: {},
+      deferredAfterSystemicFailure: Math.max(0, ids.length - 1),
+      haltedForSystemicFailure: false,
+      haltedForDispatchFailure: true,
+      workerBypassConfigured: Boolean(bypassSecret),
+    };
+  }
+  const settled = [first[0], ...(await Promise.allSettled(ids.slice(1).map(dispatchOne)))];
   const failedIds = settled.flatMap((result, index) =>
     result.status === "rejected" ? [ids[index]] : [],
   );
@@ -87,6 +131,9 @@ async function dispatchWorkers(
     systemicFailures: outcomes.filter((item) => item.systemic).length,
     sourceBlocked: outcomes.filter((item) => item.sourceBlocked).length,
     workerStates,
+    deferredAfterSystemicFailure: 0,
+    haltedForSystemicFailure: false,
+    haltedForDispatchFailure: false,
     workerBypassConfigured: Boolean(bypassSecret),
   };
 }
@@ -119,6 +166,28 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({
         skipped: true,
         reason: "daily dispatch already running",
+      });
+
+    const todayKst = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Seoul",
+    }).format(new Date());
+    const latestDaily = (await recentRuns()).find(
+      (run: any) => run.kind === "daily-production",
+    );
+    const latestDailyDate = latestDaily?.started_at
+      ? new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Asia/Seoul",
+        }).format(new Date(latestDaily.started_at))
+      : "";
+    if (
+      latestDailyDate === todayKst &&
+      latestDaily?.detail?.haltedForSystemicFailure === true
+    )
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        reason: "오늘 공통 API 오류로 이미 중단되어 추가 호출을 보류했습니다.",
+        haltedForSystemicFailure: true,
       });
 
     runId = await startRun("daily-production");
@@ -187,7 +256,9 @@ export async function GET(req: NextRequest) {
           const result = await dispatchWorkers(req, jobIds, targetBlogId);
           const failures = result.dispatchFailures + result.workerFailures;
           const status =
-            failures === jobIds.length && result.systemicFailures === jobIds.length
+            result.haltedForSystemicFailure ||
+            result.haltedForDispatchFailure ||
+            (failures === jobIds.length && result.systemicFailures === jobIds.length)
               ? "failed"
               : failures > 0
                 ? "partial"

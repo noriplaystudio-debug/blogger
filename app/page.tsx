@@ -31,6 +31,9 @@ type Angle = {
 type Plan = {
   weekLabel: string;
   marketSummary: string;
+  methodNote?: string;
+  demandWindowDays?: number;
+  searchVolumeDisclosure?: string;
   sources: { title: string; url: string }[];
   qualityGate?: {
     requestedCategories: number;
@@ -2246,6 +2249,9 @@ export default function Home() {
           </fieldset>
         </div>
         <div className="costControls">
+          <small>
+            아래 값과 사용량 표시는 앱 설정 단가에 따른 추정치입니다. 실제 공급자 청구액·토큰 사용량은 OpenAI·Anthropic 등 각 API 사용량 화면에서 확인해야 합니다.
+          </small>
           <label>
             글 1개 전체 예상 비용 (조사·작성·검수·최종 감사, 원)
             <input
@@ -3401,6 +3407,11 @@ export default function Home() {
               <div>
                 <h2>{plan.weekLabel}</h2>
                 <p>{plan.marketSummary}</p>
+                <small>
+                  {plan.searchVolumeDisclosure ||
+                    plan.methodNote ||
+                    "최근 30일 공개 관심 신호와 장기 반복성을 참고합니다. 실제 광고 키워드 도구 수치가 없으면 정확한 검색량을 표시하지 않습니다."}
+                </small>
               </div>
             </div>
             <div className="categoryGrid">
@@ -3412,7 +3423,7 @@ export default function Home() {
                     {plan.qualityGate.requestedCategories} · 키워드{" "}
                     {plan.qualityGate.selectedKeywords}개
                     {typeof plan.qualityGate.selectedRealtimeCategories ===
-                      "number" && (
+                      "number" && plan.qualityGate.selectedRealtimeCategories > 0 && (
                       <>
                         {" "}
                         · 실시간 관심 카테고리{" "}

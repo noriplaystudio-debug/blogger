@@ -42,6 +42,9 @@ function safeRunDetail(detail: any) {
     dispatchFailures: count("dispatchFailures"),
     workerFailures: count("workerFailures"),
     systemicFailures: count("systemicFailures"),
+    deferredAfterSystemicFailure: count("deferredAfterSystemicFailure"),
+    haltedForSystemicFailure: Boolean(detail?.haltedForSystemicFailure),
+    haltedForDispatchFailure: Boolean(detail?.haltedForDispatchFailure),
     sourceBlocked: count("sourceBlocked"),
     workerStates: detail?.workerStates && typeof detail.workerStates === "object"
       ? Object.fromEntries(
@@ -159,6 +162,7 @@ export async function GET() {
         },
         operational,
         budget: {
+          basis: "configuration-estimate-only-not-provider-invoice",
           monthlyAiBudgetWon: config.monthlyAiBudgetWon,
           estimatedArticleCostWon: config.estimatedArticleCostWon,
           estimatedWeeklyPlanCostWon: config.estimatedWeeklyPlanCostWon,
@@ -170,6 +174,11 @@ export async function GET() {
             config.monthlyAiBudgetWon > 0 &&
             monthlyCosts.aiCostWon + config.estimatedArticleCostWon >
               config.monthlyAiBudgetWon,
+        },
+        models: {
+          research: process.env.RESEARCH_MODEL || "gpt-5.6-terra",
+          writer: config.writerModel,
+          reviewer: config.reviewerModel,
         },
         weeklyPlan: {
           categories: planCategories.length,

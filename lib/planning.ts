@@ -89,27 +89,17 @@ function curatePlan(plan: any, settings: PlanningSettings) {
   const usedKeywords: string[] = [];
   const eligibleCategories = plan.categories
     .map((category: any) => {
-      const contentMode =
-        category.contentMode === "realtime" ? "realtime" : "evergreen";
+      const contentMode = "evergreen" as const;
       const categoryScore = weightedScore(
         category.scores,
-        contentMode === "realtime"
-          ? {
-              demand: 0.22,
-              momentum: 0.25,
-              durability: 0.05,
-              accessibility: 0.13,
-              adSafety: 0.15,
-              sourceability: 0.2,
-            }
-          : {
-              demand: 0.2,
-              momentum: 0.1,
-              durability: 0.2,
-              accessibility: 0.15,
-              adSafety: 0.15,
-              sourceability: 0.2,
-            },
+        {
+          demand: 0.2,
+          momentum: 0.1,
+          durability: 0.2,
+          accessibility: 0.15,
+          adSafety: 0.15,
+          sourceability: 0.2,
+        },
         category.name || "카테고리",
       );
       // Model-generated scores rank candidates, but should not act as brittle
@@ -121,10 +111,7 @@ function curatePlan(plan: any, settings: PlanningSettings) {
         rejected.push({
           type: "category",
           name: category.name || "이름 없음",
-          reason:
-            contentMode === "realtime"
-              ? "실시간 수요·상승세·광고 안전성·출처 확보 기준 미달"
-              : "지속성·광고 안전성·출처 확보 품질 기준 미달",
+          reason: "광고 안전성 기본 기준 미달",
         });
         return null;
       }
@@ -138,32 +125,22 @@ function curatePlan(plan: any, settings: PlanningSettings) {
           contentMode,
           priorityScore: weightedScore(
             keyword.scores,
-            contentMode === "realtime"
-              ? {
-                  demand: 0.2,
-                  momentum: 0.24,
-                  durability: 0.04,
-                  competitionOpportunity: 0.12,
-                  sourceability: 0.18,
-                  uniqueValue: 0.12,
-                  topicalFit: 0.1,
-                }
-              : {
-                  demand: 0.18,
-                  momentum: 0.1,
-                  durability: 0.15,
-                  competitionOpportunity: 0.15,
-                  sourceability: 0.15,
-                  uniqueValue: 0.17,
-                  topicalFit: 0.1,
-                },
+            {
+              demand: 0.18,
+              momentum: 0.1,
+              durability: 0.15,
+              competitionOpportunity: 0.15,
+              sourceability: 0.15,
+              uniqueValue: 0.17,
+              topicalFit: 0.1,
+            },
             keyword.keyword || "키워드",
           ),
         }))
         .sort((a: any, b: any) => b.priorityScore - a.priorityScore)
         .filter((keyword: any) => {
           const sourceDomains = evidenceDomains(keyword.evidence);
-          const gatePassed = keyword.confidence !== "낮음";
+          const gatePassed = sourceDomains.size >= 1;
           const overlaps = usedKeywords.some(
             (used) => phraseSimilarity(used, keyword.keyword || "") >= 0.72,
           );
@@ -173,11 +150,7 @@ function curatePlan(plan: any, settings: PlanningSettings) {
               name: keyword.keyword || "이름 없음",
               reason: overlaps
                 ? "기존 선정 키워드와 검색 의도가 지나치게 유사함"
-                : sourceDomains.size < 1
-                  ? "키워드 선정에 사용할 공개 관심 신호 링크를 확보하지 못함"
-                  : contentMode === "realtime"
-                    ? "공개 관심 신호 또는 기본 형식 기준 미달"
-                    : "공개 관심 신호 또는 기본 형식 기준 미달",
+                : "공개 관심 신호 URL을 확인하지 못함",
             });
             return false;
           }
@@ -202,29 +175,9 @@ function curatePlan(plan: any, settings: PlanningSettings) {
     })
     .filter(Boolean)
     .sort((a: any, b: any) => b.priorityScore - a.priorityScore);
-  const realtimeTarget = Math.min(
-    settings.categoryCount,
-    Math.max(1, Math.ceil(settings.categoryCount * 0.4)),
-  );
-  const realtime = eligibleCategories.filter(
-    (category: any) => category.contentMode === "realtime",
-  );
-  const evergreen = eligibleCategories.filter(
-    (category: any) => category.contentMode === "evergreen",
-  );
-  const selectedRealtime = realtime.slice(0, realtimeTarget);
-  const categories = [
-    ...selectedRealtime,
-    ...evergreen.slice(0, settings.categoryCount - selectedRealtime.length),
-    ...realtime.slice(selectedRealtime.length),
-  ]
+  const categories = eligibleCategories
     .slice(0, settings.categoryCount)
-    .sort(
-      (a: any, b: any) =>
-        Number(b.contentMode === "realtime") -
-          Number(a.contentMode === "realtime") ||
-        b.priorityScore - a.priorityScore,
-    );
+    .sort((a: any, b: any) => b.priorityScore - a.priorityScore);
   if (!categories.length)
     throw new Error(
       "이번 조사에서는 품질 기준을 통과한 주제가 없습니다. 낮은 품질의 글을 억지로 만들지 않았습니다.",
@@ -240,12 +193,10 @@ function curatePlan(plan: any, settings: PlanningSettings) {
         (sum: number, category: any) => sum + category.keywords.length,
         0,
       ),
-      realtimeTarget,
-      selectedRealtimeCategories: categories.filter(
-        (category: any) => category.contentMode === "realtime",
-      ).length,
+      realtimeTarget: 0,
+      selectedRealtimeCategories: 0,
       rejected,
-      rule: "카테고리의 약 40%(최소 1개)는 검증 가능한 사건·연예·스포츠 등 실시간 관심 트랙으로 우선 배정하고, 나머지는 장기 검색형으로 구성함. 각 트랙의 수요·현재성·광고 안전성·출처 기준 미달 항목은 발행하지 않음",
+      rule: "최근 30일 공개 검색 관심 신호와 지속성을 바탕으로 정보·설명·문제 해결형 상시 주제만 선정함. 정확한 검색량은 공식 키워드 도구에서 확인되지 않으면 수치로 제시하지 않음",
     },
   };
 }
@@ -524,25 +475,19 @@ export async function createCategoryStage(
   } = {},
 ) {
   const settings = normalizePlanningSettings(context.settings);
-  const realtimeTarget = Math.min(
-    settings.categoryCount,
-    Math.max(1, Math.ceil(settings.categoryCount * 0.4)),
-  );
   const response = await new OpenAI({ apiKey, timeout: 90000, maxRetries: 1 }).responses.create({
     model: process.env.RESEARCH_MODEL || "gpt-5.6-terra",
     tools: [{ type: "web_search" }],
     include: ["web_search_call.action.sources" as any],
-    reasoning: { effort: "medium" },
-    max_output_tokens: 5000,
-    input: `오늘 기준 한국의 공개 검색 관심 신호를 조사해 Google Blogger 카테고리 후보만 선정한다. 아직 키워드나 글 방향은 만들지 않는다.
+    reasoning: { effort: "low" },
+    max_output_tokens: 3500,
+    input: `최근 30일 한국의 공개 검색 관심 신호를 조사해 Google Blogger의 장기 운영 카테고리 후보만 선정한다. 아직 키워드나 글 방향은 만들지 않는다. 웹 검색은 필요한 검색어와 자료만 확인하고 최대 3회로 제한한다.
 
-요청 카테고리: 최종 최대 ${settings.categoryCount}개. 이번 응답에는 후보를 최대 ${Math.min(20, Math.max(settings.categoryCount * 2, settings.categoryCount + 3))}개까지 출력한다. 서버가 독립 근거 출처와 점수 형식을 검증한 뒤 최종 수량만 선정한다. 카테고리 수가 1개여도 실시간 관심형을 먼저 검토하며, 전체의 약 40%(최소 ${realtimeTarget}개)는 realtime으로 우선 선정한다. realtime은 사건·방송·공연·영화·음악·스포츠 일정·결과·기록·공식 발표처럼 1시간~7일 동안 관심이 집중되는 주제다. evergreen은 3개월 이상 반복 검색될 문제다.
+요청 카테고리: 최대 ${settings.categoryCount}개. 정보 전달·용어 설명·조건 비교·생활 문제 해결처럼 3개월 이상 반복해서 검색될 evergreen 주제만 선정한다. 스포츠 경기 결과·연예 소식·사회 사건 속보처럼 관심이 급격히 사라지는 단발성 주제는 제외한다. 반복 검색되는 규칙·제도·이용 방법은 특정 사건을 다루지 않는 상시 설명형으로 다룰 수 있다.
 
 블로그 수를 늘리지 않도록 독자 목적이 비슷한 카테고리를 3~4개씩 같은 blogGroupId로 묶는다. 전체 수량상 불가피할 때만 2개 묶음을 허용한다. 서로 완전히 무관한 주제는 한 묶음에 넣지 않는다. 블로그 이름은 특정 카테고리에 종속되지 않는 '오늘의 똑똑이', '알쓸 똑똑이' 같은 중립적인 브랜드형 이름으로 제안한다. 같은 blogGroupId의 카테고리는 추천 이름·소개·주소 후보가 모두 같아야 한다.
 
-실시간이라고 배제하지 않는다. 단, 연예인 사생활·루머·확인되지 않은 열애설, 피해자 신상·잔혹 묘사·사건 자극화, 정치 선동, 고위험 의료·법률·투자 추천, 성인·도박·불법·혐오·저작권 침해는 제외한다. 연예는 공식 작품·방송·공연·차트·수상 정보, 스포츠는 공식 일정·결과·기록·규정·공개 발표, 사건은 공공기관 발표·교통·안전·서비스 변경·후속 절차처럼 검증 가능한 정보만 다룬다.
-
-Google Trends·자동완성·관련 검색어·최근 보도량·공식 자료 등 공개 관심 신호를 확인하되 자동완성 순서를 검색량으로 주장하지 않는다. 각 카테고리는 선정 이유를 추적할 수 있는 실제 URL을 evidence에 최소 1개 넣고, 서로 다른 신호가 2개 이상이면 우선한다. 이 단계는 수요·관심도 선별 단계이므로 글 본문의 사실 검증 수준까지 요구하지 않는다. 사용자 개인 검색 기록은 사용하지 않는다.
+최근 30일 Google Trends·관련 검색어·Search Console(제공될 때)·공개 자료를 관심 신호로 활용하고, 12개월 추세나 반복되는 문제 유형으로 지속성을 확인한다. 자동완성 순서와 모델 점수는 절대 검색량이 아니다. Google Ads Keyword Planner 또는 네이버 검색광고 키워드 도구가 실제 월간 수치를 명시한 경우에만 정확한 검색량을 기록한다. 이 확인 경로가 없으면 검색량은 null로 두고 최근 30일 상대 관심 신호라고 표시한다. 확인되지 않은 검색량·CPC·경쟁률 숫자를 만들지 않는다. 각 카테고리는 선정 이유를 추적할 실제 URL을 evidence에 최소 1개 넣는다. 사용자 개인 검색 기록은 사용하지 않는다.
 
 현재 운영 카테고리: ${JSON.stringify((context.categoryPortfolio || []).slice(0, 20))}
 현재 운영 카테고리에 이름이 이미 있는 항목은 새 후보로 다시 출력하지 않는다. 기존 카테고리의 부족한 주간 발행량을 보충하려는 호출일 수 있으므로, 기존 이름·거의 같은 범위·같은 독자 문제를 피하고 서로 다른 신규 카테고리를 우선 제안한다.
@@ -550,7 +495,7 @@ Google Trends·자동완성·관련 검색어·최근 보도량·공식 자료 �
 성과 참고: ${JSON.stringify(context.performanceGuidance || []).slice(0, 8000)}
 수익 전략 참고: ${JSON.stringify(context.strategyGuidance || {}).slice(0, 6000)}
 
-JSON만 출력한다: {"weekLabel":"YYYY-MM-DD 시작 주간","marketSummary":"조사 결과와 한계","methodNote":"공개 관심 신호 기반임을 설명","categories":[{"name":"카테고리","contentMode":"evergreen|realtime","audience":"특정 독자","sitePurpose":"반복 해결할 문제","blogGroupId":"shared-group-1","suggestedBlogName":"중립적인 브랜드 이름","suggestedBlogDescription":"묶인 카테고리를 포괄하는 한 줄 소개","suggestedBlogAddresses":["address-one","address-two","address-three"],"reason":"선정 근거","trend":"상승|보합|판단보류","confidence":"높음|중간","scores":{"demand":0,"momentum":0,"durability":0,"accessibility":0,"adSafety":0,"sourceability":0},"evidence":[{"signal":"관찰 신호","period":"1시간|24시간|7일|30일|12개월","url":"https://..."}]}]}`,
+JSON만 출력한다: {"weekLabel":"YYYY-MM-DD 시작 주간","marketSummary":"최근 30일 관심 신호와 12개월 지속성 근거 및 한계","methodNote":"정확한 월간 검색량과 상대 검색 관심 신호를 구분","categories":[{"name":"카테고리","contentMode":"evergreen","audience":"특정 독자","sitePurpose":"반복 해결할 문제","blogGroupId":"shared-group-1","suggestedBlogName":"중립적인 브랜드 이름","suggestedBlogDescription":"묶인 카테고리를 포괄하는 한 줄 소개","suggestedBlogAddresses":["address-one","address-two","address-three"],"reason":"선정 근거","trend":"상승|보합|판단보류","confidence":"높음|중간","scores":{"demand":0,"momentum":0,"durability":0,"accessibility":0,"adSafety":0,"sourceability":0},"searchVolumeLast30Days":null,"searchVolumeBasis":"unavailable|google_ads_keyword_planner|naver_search_ads","evidence":[{"signal":"최근 30일 공개 관심 신호; 절대 검색량이 아님","period":"최근30일|12개월","url":"https://..."}]}]}`,
   });
   const value = parseJson<any>(response.output_text);
   if (!Array.isArray(value?.categories) || !value.categories.length)
@@ -564,10 +509,12 @@ JSON만 출력한다: {"weekLabel":"YYYY-MM-DD 시작 주간","marketSummary":"�
   const seen = new Set<string>();
   const eligibleCategories: any[] = [];
   for (const category of value.categories) {
+    category.contentMode = "evergreen";
+    category.searchVolumeLast30Days = null;
+    category.searchVolumeBasis = "unavailable";
     const key = normalized(category?.name || "");
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    if (!["evergreen", "realtime"].includes(category.contentMode)) continue;
     category.scores = category.scores || {};
     for (const scoreName of [
       "demand",
@@ -593,29 +540,24 @@ JSON만 출력한다: {"weekLabel":"YYYY-MM-DD 시작 주간","marketSummary":"�
   }
   eligibleCategories.sort(
     (a, b) =>
-      Number(b.contentMode === "realtime") -
-        Number(a.contentMode === "realtime") ||
       Number(b.scores?.sourceability || 0) -
         Number(a.scores?.sourceability || 0) ||
       Number(b.scores?.demand || 0) - Number(a.scores?.demand || 0),
   );
-  const selectedCategories = eligibleCategories.slice(
-    0,
-    Math.min(10, Math.max(settings.categoryCount + 2, settings.categoryCount)),
-  );
+  const selectedCategories = eligibleCategories.slice(0, settings.categoryCount);
   if (!selectedCategories.length)
     throw new Error(
       "공개 관심 신호를 확인할 수 있는 카테고리가 없습니다. 다음 실행에서 후보를 다시 조사합니다.",
     );
-  if (
-    !selectedCategories.some(
-      (category: any) => category.contentMode === "realtime",
-    )
-  )
-    throw new Error(
-      "확인 가능한 공개 관심 신호가 있는 실시간 카테고리가 없습니다. 다음 실행에서 후보를 다시 조사합니다.",
-    );
   value.categories = selectedCategories;
+  value.demandWindowDays = 30;
+  value.searchVolumeDisclosure =
+    "정확한 월간 검색량은 광고 키워드 도구의 확인값만 사용합니다. 그 외는 최근 30일 상대 관심 신호이며 검색량 숫자가 아닙니다.";
+  for (const category of value.categories) {
+    category.contentMode = "evergreen";
+    category.searchVolumeLast30Days = null;
+    category.searchVolumeBasis = "unavailable";
+  }
   assignSharedBlogGroups(value.categories);
   return {
     draft: value,
@@ -643,21 +585,21 @@ export async function createKeywordStage(
     model: process.env.RESEARCH_MODEL || "gpt-5.6-terra",
     tools: [{ type: "web_search" }],
     include: ["web_search_call.action.sources" as any],
-    reasoning: { effort: "medium" },
-    max_output_tokens: 6000,
-    input: `다음 Google Blogger 카테고리에서 이번 주에 작성할 키워드만 조사한다. 글 방향은 아직 만들지 않는다.
+    reasoning: { effort: "low" },
+    max_output_tokens: 4200,
+    input: `다음 Google Blogger 상시형 카테고리에서 최근 30일 수요 신호와 반복 검색 가능성을 확인해 이번 주 키워드만 조사한다. 글 방향은 아직 만들지 않는다. 이 카테고리의 핵심 질문을 확인할 수 있도록 웹 검색을 최대 3회 수행한다.
 
 카테고리: ${JSON.stringify(category)}
 최종 필요 키워드 수는 ${settings.keywordsPerCategory}개다. 이번 응답에는 후보를 최대 ${candidatePoolSize}개까지 출력한다. 공개 자료 한 곳에서 핵심 질문을 확인할 수 있으면 후보로 유지한다. 각 키워드는 실제 독자 질문이어야 하며 서로 검색 의도가 겹치지 않아야 한다. 특히 상대팀·지역·날짜·제품명처럼 '대상만 바뀌고 독자가 원하는 답이 같은 키워드'는 별도 글 후보로 쪼개지 않는다. 이런 후보들은 같은 articleGroupKey를 부여하고, 여러 대상을 한 글에서 자연스럽게 다룰 수 있는 umbrellaKeyword를 함께 제안한다. 예: '한국 A전 중계 어디서', '한국 B전 중계 어디서'는 같은 articleGroupKey로 묶고 '한국 축구 국가대표 친선경기 일정·중계 보는 법' 같은 하나의 umbrellaKeyword로 합친다.
 
-카테고리가 realtime이면 짧은 유효기간 때문에 제외하지 말고 수요·상승세·공식 출처·광고 안전성으로 평가한다. freshnessWindowHours는 6·24·72·168 중 하나로 정하고 eventDate와 현재 sourceCheckedAt을 기록한다. 행사·경기·시상식이 아직 끝나지 않았다면 수상작·우승·최종 결과·최종 순위처럼 미래 사실을 전제한 키워드를 선정하지 말고 일정·후보·현재 순위·관전 포인트처럼 현재 확인 가능한 질문으로 자동 전환한다. evergreen이면 반복 검색 가능성과 실행 가치를 우선한다.
+단발성 경기 결과·연예 소식·사회 사건 속보는 선정하지 않는다. 규칙·제도·절차·용어·조건 비교처럼 여러 달 동안 반복 검색될 정보형·설명형·문제 해결형 질문을 우선한다. 최근 30일 Google Trends·관련 검색·Search Console(제공될 때) 등으로 수요 방향을 확인하고, 12개월 반복성도 대조한다. 정확한 최근 30일 검색량은 Google Ads Keyword Planner 또는 네이버 검색광고 키워드 도구가 실제 숫자를 명시한 경우에만 기록하고, 그 외에는 null로 둔다.
 
-이 단계의 목적은 '글의 사실 근거를 완성하는 것'이 아니라 '이번 주에 쓸 만한 검색 수요·관심 신호를 고르는 것'이다. 각 키워드는 Google Trends·자동완성·관련 검색·최근 보도량·공식 일정 등 공개 관심 신호를 evidence에 최소 1개 넣는다. 서로 다른 신호가 2개 이상이면 더 좋지만 필수는 아니다. 글에 들어갈 사실·수치·조건의 교차검증은 글 작성 단계에서 별도로 다시 수행하므로 여기서 verifiedClaims를 확보하지 못했다는 이유로 키워드를 탈락시키지 않는다. 루머·사생활·피해자 신상·자극적 추측·확인되지 않은 책임 단정은 제외한다. 검색량·CPC 숫자를 추정하지 않는다.
+이 단계의 목적은 본문 사실 검증이 아니라 최근 30일 관심 신호와 장기 지속 가능성을 고르는 것이다. 각 키워드에 실제 관심 신호 URL을 최소 1개 넣고 관측 기간을 명시한다. 자동완성 순서·모델 점수를 절대 검색량으로 표현하지 않는다. 검색량·CPC·경쟁률 숫자를 추정하거나 만들어내지 않는다.
 
 최근 사용 키워드(최근 80개): ${JSON.stringify((input.recentKeywords || []).slice(0, 80))}
 최근 콘텐츠(최근 100개 요약): ${JSON.stringify((input.recentContent || []).slice(0, 100)).slice(0, 7000)}
 
-JSON만 출력한다: {"keywords":[{"keyword":"구체적 검색어","articleGroupKey":"대상명이 달라도 같은 답이면 동일한 안정적 그룹키","umbrellaKeyword":"같은 그룹을 하나의 글로 합쳤을 때 사용할 대표 검색 주제","mergeScope":["이 글에 함께 포함할 대상·경기·제품·지역"],"contentMode":"${category.contentMode}","freshnessWindowHours":24,"eventDate":"YYYY-MM-DD 또는 해당 없음","sourceCheckedAt":"ISO-8601 시각","intent":"정보형|비교형|문제해결형|구매형","clusterRole":"기둥글|하위질문|비교|실행|문제해결","trend":"상승|보합|판단보류","confidence":"높음|중간","scores":{"demand":0,"momentum":0,"durability":0,"competitionOpportunity":0,"sourceability":0,"uniqueValue":0,"topicalFit":0},"reason":"왜 이번 주에 다룰 가치가 있는지","evidence":[{"signal":"공개 관심 신호","period":"1시간|24시간|7일|30일|12개월","url":"https://..."}]}]}`,
+JSON만 출력한다: {"keywords":[{"keyword":"구체적 검색어","articleGroupKey":"같은 검색 의도를 합치는 안정적 그룹키","umbrellaKeyword":"대표 검색 주제","mergeScope":["함께 다룰 하위 질문"],"contentMode":"evergreen","intent":"정보형|비교형|문제해결형|구매형","clusterRole":"기둥글|하위질문|비교|실행|문제해결","trend":"상승|보합|판단보류","confidence":"높음|중간","scores":{"demand":0,"momentum":0,"durability":0,"competitionOpportunity":0,"sourceability":0,"uniqueValue":0,"topicalFit":0},"reason":"최근 30일 신호·12개월 지속성의 근거와 한계","searchVolumeLast30Days":null,"searchVolumeBasis":"unavailable|google_ads_keyword_planner|naver_search_ads","evidence":[{"signal":"실제 관찰한 공개 관심 신호; 절대 검색량 아님","period":"최근30일|12개월","url":"https://..."}]}]}`,
   });
   const value = parseJson<any>(response.output_text);
   if (!Array.isArray(value?.keywords) || !value.keywords.length)
@@ -669,7 +611,9 @@ JSON만 출력한다: {"keywords":[{"keyword":"구체적 검색어","articleGrou
     const key = normalized(keyword?.keyword || "");
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    keyword.contentMode = category.contentMode;
+    keyword.contentMode = "evergreen";
+    keyword.searchVolumeLast30Days = null;
+    keyword.searchVolumeBasis = "unavailable";
     keyword.angles = [];
     keyword.scores = keyword.scores || {};
     for (const scoreName of [
@@ -694,12 +638,6 @@ JSON만 출력한다: {"keywords":[{"keyword":"구체적 검색어","articleGrou
       keyword.trend = "판단보류";
     if (!keyword.confidence || !["높음", "중간", "낮음"].includes(keyword.confidence))
       keyword.confidence = "중간";
-    if (category.contentMode === "realtime") {
-      if (![6, 24, 72, 168].includes(Number(keyword.freshnessWindowHours)))
-        keyword.freshnessWindowHours = 24;
-      if (!Number.isFinite(Date.parse(keyword.sourceCheckedAt || "")))
-        keyword.sourceCheckedAt = new Date().toISOString();
-    }
     const planningDomains = evidenceDomains(keyword.evidence);
     keyword.verifiedSources = openedSources.filter((source: any) =>
       planningDomains.has(urlDomain(source?.url)),
@@ -1016,20 +954,16 @@ export async function createWeeklyPlan(
     settings.categoryCount *
     settings.keywordsPerCategory *
     settings.articlesPerKeyword;
-  const realtimeTarget = Math.min(
-    settings.categoryCount,
-    Math.max(1, Math.ceil(settings.categoryCount * 0.4)),
-  );
   const activePortfolio = (context.categoryPortfolio || []).slice(
     0,
     settings.categoryCount,
   );
   const newCategorySlots = Math.min(
     settings.categoryCount,
-    Math.max(realtimeTarget, settings.categoryCount - activePortfolio.length),
+    Math.max(0, settings.categoryCount - activePortfolio.length),
   );
   const portfolioRule = activePortfolio.length
-    ? `\n9. 운영 중인 블로그 카테고리는 ${JSON.stringify(activePortfolio)}다. 품질 기준을 통과한 기존 카테고리를 우선 검토하고 이름을 바꾸지 않는다. 각 기존 블로그의 독자·핵심 목적과 맞지 않는 유행 키워드를 억지로 넣지 않는다. 실시간 관심 트랙이 기존 포트폴리오에 없다면 장기형 기존 카테고리 일부를 이번 주 계획에서 쉬게 하고 신규 실시간 카테고리를 포함할 수 있다. 신규 카테고리는 최대 ${newCategorySlots}개까지만 추가한다. 신규 카테고리마다 별도 Blogger를 권하지 말고 독자 목적이 비슷한 기존 카테고리 또는 신규 카테고리 2~4개와 하나의 주제군으로 묶는다. 기존 카테고리도 정책 위험 또는 근거 부족이면 이번 주 수량이 줄더라도 제외한다.`
+    ? `\n9. 운영 중인 블로그 카테고리는 ${JSON.stringify(activePortfolio)}다. 기존 카테고리의 독자·핵심 목적과 맞는 상시 정보형 주제를 우선한다. 단발 유행 키워드는 넣지 않는다. 신규 카테고리는 최대 ${newCategorySlots}개까지만 추가한다. 신규 카테고리마다 별도 Blogger를 권하지 말고 독자 목적이 비슷한 기존 카테고리 또는 신규 카테고리 2~4개와 하나의 주제군으로 묶는다. 기존 카테고리도 실제 정책 위험 또는 핵심 질문의 공개 근거가 전혀 없을 때만 제외한다.`
     : "\n9. 아직 운영 카테고리 포트폴리오가 없으므로 이번에는 시장 신호를 바탕으로 새 카테고리를 발굴한다. 이후 사용자가 각 카테고리를 Blogger 블로그에 매핑해야 자동 임시저장이 가능하다.";
   const historyRule = context.recentKeywords?.length
     ? `\n최근 사용 키워드(동일 의도의 반복·자기잠식 금지): ${JSON.stringify(context.recentKeywords.slice(0, 80))}\n최근 콘텐츠 인벤토리(같은 질문을 다시 만들지 말고, 기존 글에서 빠진 하위 질문·후속 단계만 확장): ${JSON.stringify((context.recentContent || []).slice(0, 120)).slice(0, 9000)}`
@@ -1044,15 +978,15 @@ export async function createWeeklyPlan(
     model: process.env.RESEARCH_MODEL || "gpt-5.6-terra",
     tools: [{ type: "web_search" }],
     include: ["web_search_call.action.sources" as any],
-    reasoning: { effort: "medium" },
+    reasoning: { effort: "low" },
     max_output_tokens: 24000,
     input: `오늘 기준 한국의 공개 검색 관심 신호를 조사해 다음 1주 Google Blogger 편집 계획을 만든다. 사용자의 검색 기록, 대화 취향, 개인정보는 절대 사용하지 않는다.
 
 [조사 한계와 판정 규칙]
-1. Google Trends, 검색 자동완성·관련 검색어, 최근 보도량, 커뮤니티 반복 질문, 공공·사업자 자료처럼 공개적으로 확인 가능한 신호를 교차 확인한다.
+1. 최근 30일 Google Trends·관련 검색어·Search Console(연결되어 제공될 때)·공개 자료에서 관심 신호를 확인하고, 12개월 반복성으로 상시 수요인지 대조한다. 후보마다 불필요한 다중 검색을 하지 않는다.
 2. 자동완성 순서는 정확한 검색량 순위가 아니며, 절대 검색량을 제공하지 않는다. 확인할 수 없는 검색량·CPC·경쟁률 숫자를 만들지 않는다.
-3. 최근 상승은 가능하면 서로 독립적인 신호 2개 이상 또는 권위 있는 추세 자료 1개로 확인한다. 근거가 약하거나 서로 충돌하면 trend와 confidence를 각각 '판단보류', '낮음'으로 쓴다.
-4. 콘텐츠를 evergreen(장기 검색형)과 realtime(실시간 관심형)으로 분리한다. evergreen은 3개월 이상 반복 검색될 문제를 우선한다. realtime은 1시간~7일 안에 관심이 집중되는 사건·방송·공연·영화·음악·스포츠 일정·경기 결과·기록·공식 발표도 적극 포함하며, 짧게 유효하다는 이유만으로 제외하지 않는다.
+3. 신호가 명확하지 않으면 상승·검색량을 단정하지 말고 '판단보류'로 둔다. 이를 이유로 유용하고 확인 가능한 상시 주제를 탈락시키지 않는다.
+4. evergreen(장기 검색형) 정보·설명·문제해결형 콘텐츠만 선정한다. 스포츠 경기 결과·연예 소식·사회 사건 속보 등 단발성 주제는 제외한다. 절차·용어·조건·이용 방법처럼 계속 검색되는 질문은 허용한다.
 5. 건강·의료, 법률, 대출·투자 추천, 선거·정치 선동 등 고위험 YMYL, 연예인 사생활·확인되지 않은 열애설·루머, 피해자 신상·잔혹 묘사·사건 자극화, 성인·도박·불법, 혐오·충격 소재, 저작권 침해 유도는 제외한다. 연예는 공식 발표·작품·방송·공연·차트·수상 정보, 스포츠는 공식 일정·결과·기록·규정·선수 또는 구단의 공개 발표, 사건은 독자의 생활에 영향을 주는 공공기관 발표·교통·안전·서비스 변경·후속 절차처럼 검증 가능한 정보만 다룬다.
 6. 새 블로그가 답할 수 있을 만큼 구체적이고 독자가 실제 행동으로 옮길 수 있는 정보형·문제해결형 키워드를 우선한다. 1차 자료가 있으면 우선하지만 필수는 아니다. 관련 공개 자료 하나라도 찾아 핵심 질문에 답할 수 있는 주제는 후보로 유지한다.
 7. 카테고리는 서로 충분히 달라야 하고 각각 별도 전문 블로그로 최소 6개월 운영 가능한 범위여야 한다. 각 블로그는 한 문장으로 설명되는 특정 독자와 문제 영역을 유지한다. 특정 브랜드에 과도하게 종속되거나 광고만을 위한 얕은 주제를 피한다.
@@ -1060,23 +994,21 @@ export async function createWeeklyPlan(
 8-1. 실제 사용·방문·전문 자격을 꾸며내야만 성립하는 리뷰는 제외한다. 그 외에는 공개 자료 하나를 바탕으로 조건·확인 방법·절차·체크리스트를 덧붙여 유용한 글을 만들 수 있으면 후보로 허용한다. 여러 자료 비교나 독립된 두 번째 출처를 필수로 요구하지 않는다.
 8-2. 요청 수량보다 최대 1개 많은 후보만 추가 확인하되, 출처 검색은 다음 순서로 한다: 공공기관·공식 원문 → 관련 제품·서비스·기관 홈페이지 → 관련 공개 게시 글·기사. 앞 단계에서 찾지 못하면 다음 단계로 넘어간다. 관련된 공개 자료 1개에서 핵심 주장 1개를 확인하면 후보를 유지한다. 자료가 전혀 없을 때만 질문을 좁히거나 다음 후보로 대체한다.
 8-3. 최종 키워드마다 실제로 열어 확인한 관련 URL 1개면 충분하다. 공공기관·공식 홈페이지를 우선하고, 찾지 못하면 관련 공개 게시 글·기사도 허용한다. 검색결과 페이지나 존재를 추정한 주소는 넣지 않는다. 출처가 뒷받침하는 범위로만 글의 주장을 제한한다.
-8-4. 전체 카테고리 중 약 40%, 최소 ${realtimeTarget}개는 realtime으로 우선 제안한다. 카테고리 수가 1개여도 검증 가능한 실시간 관심 카테고리 1개를 먼저 검토한다. realtime 후보는 공개 자료 1개에서 현재 관심을 확인할 수 있으면 선정할 수 있다. 정책 위험·루머·피해자 신상 등 명백한 안전 문제가 있는 경우만 제외하며, 수량을 채우려고 사실을 만들어내지 않는다.
-8-5. realtime 글은 freshnessWindowHours를 6·24·72·168 중 하나로 지정하고, eventDate와 sourceCheckedAt을 명시한다. 실시간 카테고리와 글 작업은 대기열 앞쪽에 배치한다. 결과·일정·순위처럼 바뀔 수 있는 사실은 제목과 본문에서 확인 시각 또는 기준일을 명확히 적도록 브리프에 포함한다.
-8-6. 행사·경기·시상식의 종료 여부를 공식 일정으로 먼저 확인한다. 아직 종료되지 않았다면 수상작·우승·최종 결과·최종 순위처럼 확정되지 않은 미래 사실을 전제한 키워드와 제목을 만들지 말고, 일정·후보·현재 순위·관전 포인트·확인 방법으로 자동 전환한다. 진행 중인 대회는 반드시 '현재 순위(기준 시각)'로 표현한다.
+8-4. 모든 주제는 최근 30일 공개 관심 신호와 장기 지속성을 함께 평가한다. 절대 검색량은 Google Ads Keyword Planner 또는 네이버 검색광고 키워드 도구가 실제 제공한 경우만 기록하고, 그 외에는 null 및 '상대 관심 신호'로 표시한다. 확인할 수 없는 수치·순위·CPC·검색량을 만들지 않는다.
 ${portfolioRule}
 ${historyRule}
 ${performanceRule}
 ${strategyRule}
 
 [선정 방식]
-각 카테고리를 demand(공개 관심), momentum(최근 변화), durability(지속성), accessibility(신규 블로그 공략 가능성), adSafety(광고·정책 안전성), sourceability(신뢰 출처 확보)를 0~100으로 보수적으로 평가한다. evergreen은 지속성, realtime은 수요·상승세·출처 확보에 더 높은 가중치를 둔다. 키워드는 demand, momentum, durability, competitionOpportunity(대형 사이트가 놓친 구체적 질문), sourceability, uniqueValue(단순 재요약을 넘어설 여지), topicalFit(해당 블로그 핵심 주제 적합도)을 평가한다. priorityScore는 참고값이며 서버가 트랙별 가중치로 다시 계산한다. 근거 링크는 실제 조사에 사용한 URL만 포함한다.
+각 카테고리를 demand(공개 관심), momentum(최근 변화), durability(지속성), accessibility(신규 블로그 공략 가능성), adSafety(광고·정책 안전성), sourceability(신뢰 출처 확보)를 0~100으로 보수적으로 평가한다. 최근 30일 수요와 지속성이 확인되는 상시 정보형 주제를 같은 기준으로 평가한다. 키워드는 demand, momentum, durability, competitionOpportunity(대형 사이트가 놓친 구체적 질문), sourceability, uniqueValue(단순 재요약을 넘어설 여지), topicalFit(해당 블로그 핵심 주제 적합도)을 평가한다. priorityScore는 참고값이며 서버가 트랙별 가중치로 다시 계산한다. 근거 링크는 실제 조사에 사용한 URL만 포함한다.
 
 내부 조사에서는 카테고리와 키워드 후보를 요청량보다 최대 1개 더 검토하되, 결과에는 최대 ${settings.categoryCount}개 카테고리, 카테고리별 최대 ${settings.keywordsPerCategory}개 키워드, 키워드별 서로 다른 글 방향 ${settings.articlesPerKeyword}개만 넣는다. 최대 ${totalArticles}개 작업을 우선순위대로 배열하고, 공개 자료 1개를 찾은 후보는 다른 출처가 더 없다는 이유로 제외하지 않는다. 관련 자료를 하나도 찾지 못한 후보만 질문 범위를 보정하거나 다음 후보로 대체한다. 하루 ${settings.dailyArticleLimit}개씩 처리하며 7일을 넘는 작업은 다음 날짜로 자연스럽게 이어진다.
 
 카테고리마다 별도 Blogger를 만들지 않는다. 독자 목적이 비슷한 카테고리를 3~4개씩 같은 blogGroupId로 묶고, 전체 수량상 불가피할 때만 2개 묶음을 허용한다. 같은 묶음에는 '오늘의 똑똑이', '알쓸 똑똑이'처럼 특정 주제에 종속되지 않는 동일한 한국어 브랜드 이름·한 줄 소개·영문 소문자·숫자·하이픈만 사용한 blogspot 주소 후보 3개를 제안한다. 서로 완전히 무관한 주제는 억지로 묶지 않으며 주소 사용 가능 여부는 확인했다고 주장하지 않는다.
 
 JSON만 출력한다:
-{"weekLabel":"YYYY-MM-DD 시작 주간","marketSummary":"조사 결과와 한계 요약","methodNote":"검색량 추정이 아닌 공개 관심 신호 기반임을 설명","categories":[{"name":"카테고리","contentMode":"evergreen|realtime","audience":"이 블로그의 특정 독자","sitePurpose":"이 블로그가 반복해서 해결할 문제","suggestedBlogName":"추천 블로그 이름","suggestedBlogDescription":"한 줄 소개","suggestedBlogAddresses":["address-one","address-two","address-three"],"reason":"선정 근거","trend":"상승|보합|판단보류","confidence":"높음|중간|낮음","priorityScore":0,"scores":{"demand":0,"momentum":0,"durability":0,"accessibility":0,"adSafety":0,"sourceability":0},"evidence":[{"signal":"관찰한 신호","period":"1시간|24시간|7일|30일|12개월","url":"https://..."}],"keywords":[{"keyword":"구체적 검색어","contentMode":"evergreen|realtime","freshnessWindowHours":168,"eventDate":"YYYY-MM-DD 또는 해당 없음","sourceCheckedAt":"ISO-8601 시각","intent":"정보형|비교형|문제해결형|구매형","clusterRole":"기둥글|하위질문|비교|실행|문제해결","trend":"상승|보합|판단보류","confidence":"높음|중간|낮음","priorityScore":0,"scores":{"demand":0,"momentum":0,"durability":0,"competitionOpportunity":0,"sourceability":0,"uniqueValue":0,"topicalFit":0},"reason":"근거와 한계","evidence":[{"signal":"관찰한 신호","period":"1시간|24시간|7일|30일|12개월","url":"https://..."}],"angles":[{"titleIdea":"과장 없는 제목 방향","purpose":"다른 글과의 차별화","searchQuestion":"독자가 검색창에 가진 구체적 질문","readerSituation":"이 답이 필요한 독자 상황","answerPromise":"읽고 나면 할 수 있는 판단 또는 행동","mustCover":["필수 답 1","필수 답 2","필수 답 3"],"exclusions":["이 글에서 다루지 않을 범위"],"uniqueValue":"출처를 재요약하는 데 그치지 않고 제공할 기준표·계산·절차·예외"}]}]}]}`,
+{"weekLabel":"YYYY-MM-DD 시작 주간","marketSummary":"최근 30일 관심 신호·12개월 지속성·조사 한계","methodNote":"정확한 월 검색량과 상대 관심 신호를 구분","categories":[{"name":"카테고리","contentMode":"evergreen","audience":"이 블로그의 특정 독자","sitePurpose":"이 블로그가 반복해서 해결할 문제","suggestedBlogName":"추천 블로그 이름","suggestedBlogDescription":"한 줄 소개","suggestedBlogAddresses":["address-one","address-two","address-three"],"reason":"선정 근거","trend":"상승|보합|판단보류","confidence":"높음|중간|낮음","priorityScore":0,"scores":{"demand":0,"momentum":0,"durability":0,"accessibility":0,"adSafety":0,"sourceability":0},"evidence":[{"signal":"관찰한 신호","period":"최근30일|12개월","url":"https://..."}],"keywords":[{"keyword":"구체적 검색어","contentMode":"evergreen","freshnessWindowHours":168,"eventDate":"YYYY-MM-DD 또는 해당 없음","sourceCheckedAt":"ISO-8601 시각","intent":"정보형|비교형|문제해결형|구매형","clusterRole":"기둥글|하위질문|비교|실행|문제해결","trend":"상승|보합|판단보류","confidence":"높음|중간|낮음","priorityScore":0,"scores":{"demand":0,"momentum":0,"durability":0,"competitionOpportunity":0,"sourceability":0,"uniqueValue":0,"topicalFit":0},"reason":"근거와 한계","evidence":[{"signal":"관찰한 신호","period":"최근30일|12개월","url":"https://..."}],"angles":[{"titleIdea":"과장 없는 제목 방향","purpose":"다른 글과의 차별화","searchQuestion":"독자가 검색창에 가진 구체적 질문","readerSituation":"이 답이 필요한 독자 상황","answerPromise":"읽고 나면 할 수 있는 판단 또는 행동","mustCover":["필수 답 1","필수 답 2","필수 답 3"],"exclusions":["이 글에서 다루지 않을 범위"],"uniqueValue":"출처를 재요약하는 데 그치지 않고 제공할 기준표·계산·절차·예외"}]}]}]}`,
   });
   const sources = extractCitations(response);
   await onSearchComplete?.({

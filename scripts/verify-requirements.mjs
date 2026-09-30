@@ -39,6 +39,13 @@ check(
     files.planning.includes("singleKeywordCategory"),
 );
 check(
+  "주간 계획 상시형·30일 관심 신호와 검색량 비조작",
+  files.planning.includes('const contentMode = "evergreen" as const') &&
+    files.planning.includes("최근 30일") &&
+    files.planning.includes("searchVolumeLast30Days = null") &&
+    files.planning.includes("단발성 경기 결과·연예 소식·사회 사건 속보는 선정하지 않는다"),
+);
+check(
   "주 49개 용량 부족 시 카테고리 보충",
   files.weekly.includes("weeklyArticleTarget") &&
     files.weekly.includes("plannedArticleCapacity") &&
@@ -84,7 +91,10 @@ check(
     files.daily.includes("releaseJobClaims(failedIds") &&
     files.daily.includes("workerFailures: outcomes.filter((item) => !item.ok).length") &&
     files.daily.includes('const status =') &&
+    files.daily.includes("deferredAfterSystemicFailure") &&
+    files.daily.includes("이미 중단되어 추가 호출을 보류") &&
     files.health.includes('queued: count("queued")') &&
+    files.health.includes('deferredAfterSystemicFailure: count("deferredAfterSystemicFailure")') &&
     files.health.includes('dispatchFailures: count("dispatchFailures")') &&
     files.health.includes('workerFailures: count("workerFailures")'),
 );
