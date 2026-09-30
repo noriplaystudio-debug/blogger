@@ -82,9 +82,11 @@ check(
   files.daily.includes('"x-vercel-protection-bypass"') &&
     files.daily.includes('redirect: "manual"') &&
     files.daily.includes("releaseJobClaims(failedIds") &&
-    files.daily.includes('finishRun(runId, failedIds.length ? "partial" : "success", detail)') &&
+    files.daily.includes("workerFailures: outcomes.filter((item) => !item.ok).length") &&
+    files.daily.includes('const status =') &&
     files.health.includes('queued: count("queued")') &&
-    files.health.includes('dispatchFailures: count("dispatchFailures")'),
+    files.health.includes('dispatchFailures: count("dispatchFailures")') &&
+    files.health.includes('workerFailures: count("workerFailures")'),
 );
 check(
   "타임아웃 작업 자동 복구",

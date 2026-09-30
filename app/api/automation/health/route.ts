@@ -40,6 +40,14 @@ function safeRunDetail(detail: any) {
     queuedProduction: count("queuedProduction"),
     dispatched: count("dispatched"),
     dispatchFailures: count("dispatchFailures"),
+    workerFailures: count("workerFailures"),
+    systemicFailures: count("systemicFailures"),
+    sourceBlocked: count("sourceBlocked"),
+    workerStates: detail?.workerStates && typeof detail.workerStates === "object"
+      ? Object.fromEntries(
+          Object.entries(detail.workerStates).map(([key, value]) => [key, Number(value) || 0]),
+        )
+      : {},
     publishedToday: count("publishedToday"),
     reserved: count("reserved"),
     recovered: count("recovered"),
