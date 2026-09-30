@@ -13,6 +13,7 @@ import {
   getTodayPublishedCount,
   hasDatabase,
   recoverStaleArticleJobs,
+  releaseJobClaims,
   resetGenericGenerationFailures,
   releaseAutomationLock,
   startRun,
@@ -25,22 +26,55 @@ async function dispatchWorkers(
   req: NextRequest,
   ids: string[],
   blogId: string,
+  runId: number,
 ) {
   const secret = process.env.CRON_SECRET;
-  if (!secret) throw new Error("CRON_SECRET이 없습니다.");
+  if (!secret) {
+    await releaseJobClaims(ids, "CRON_SECRET 누락으로 작업자 호출이 중단되어 재시도 대기 중입니다.");
+    throw new Error("CRON_SECRET이 없습니다.");
+  }
   const origin = new URL(req.url).origin;
-  await Promise.allSettled(
-    ids.map((jobId) =>
-      fetch(
-        `${origin}/api/cron/article-worker?jobId=${encodeURIComponent(jobId)}&blogId=${encodeURIComponent(blogId)}`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${secret}` },
-          cache: "no-store",
+  const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim();
+  const settled = await Promise.allSettled(ids.map(async (jobId) => {
+    const response = await fetch(
+      `${origin}/api/cron/article-worker?jobId=${encodeURIComponent(jobId)}&blogId=${encodeURIComponent(blogId)}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${secret}`,
+          ...(bypassSecret ? { "x-vercel-protection-bypass": bypassSecret } : {}),
         },
-      ),
-    ),
+        cache: "no-store",
+        redirect: "manual",
+      },
+    );
+    const contentType = response.headers.get("content-type") || "";
+    if (response.status >= 300 && response.status < 400) {
+      throw new Error(`worker dispatch redirected (${response.status})`);
+    }
+    if (!contentType.includes("application/json")) {
+      throw new Error(`worker dispatch returned non-JSON (${response.status})`);
+    }
+    if (!response.ok && ![500, 503].includes(response.status)) {
+      throw new Error(`worker dispatch rejected (${response.status})`);
+    }
+    // A worker's 4xx/5xx JSON response means it ran and recorded its own
+    // failure. Treat it as dispatched; only transport/protection failures
+    // leave the claim unprocessed and eligible for retry.
+    return jobId;
+  }));
+  const failedIds = settled.flatMap((result, index) =>
+    result.status === "rejected" ? [ids[index]] : [],
   );
+  if (failedIds.length) {
+    await releaseJobClaims(failedIds, "작업자 호출에 실패해 자동 재시도 대기 중입니다.");
+  }
+  const detail = {
+    dispatched: ids.length - failedIds.length,
+    dispatchFailures: failedIds.length,
+    workerBypassConfigured: Boolean(bypassSecret),
+  };
+  await finishRun(runId, failedIds.length ? "partial" : "success", detail);
 }
 
 export async function GET(req: NextRequest) {
@@ -133,18 +167,23 @@ export async function GET(req: NextRequest) {
       jobIds,
     };
 
-    await finishRun(
-      runId,
-      jobIds.length || publishedToday >= config.dailyArticleLimit
-        ? "success"
-        : "partial",
-      detail,
-    );
-
     if (jobIds.length) {
       after(async () => {
-        await dispatchWorkers(req, jobIds, targetBlogId);
+        try {
+          await dispatchWorkers(req, jobIds, targetBlogId, runId!);
+        } catch (error: any) {
+          await finishRun(runId!, "failed", {
+            ...detail,
+            dispatched: 0,
+            dispatchError: error?.message || "worker dispatch failed",
+            workerBypassConfigured: Boolean(
+              process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim(),
+            ),
+          }).catch(() => {});
+        }
       });
+    } else {
+      await finishRun(runId, "partial", { ...detail, dispatched: 0 });
     }
 
     return NextResponse.json({

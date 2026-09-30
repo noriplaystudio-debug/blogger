@@ -78,6 +78,15 @@ check(
     files.articleWorker.includes("publishBloggerDraft"),
 );
 check(
+  "worker 보호 차단 감지·선점 복구·실행 상태 기록",
+  files.daily.includes('"x-vercel-protection-bypass"') &&
+    files.daily.includes('redirect: "manual"') &&
+    files.daily.includes("releaseJobClaims(failedIds") &&
+    files.daily.includes('finishRun(runId, failedIds.length ? "partial" : "success", detail)') &&
+    files.health.includes('queued: count("queued")') &&
+    files.health.includes('dispatchFailures: count("dispatchFailures")'),
+);
+check(
   "타임아웃 작업 자동 복구",
   files.store.includes("recoverStaleArticleJobs") &&
     files.store.includes("finishStaleAutomationRuns") &&

@@ -31,12 +31,26 @@ function koreaDateTimeParts(date = new Date()) {
 
 function safeRunDetail(detail: any) {
   const results = Array.isArray(detail?.results) ? detail.results : [];
+  const count = (key: string) =>
+    Number.isFinite(Number(detail?.[key])) ? Number(detail[key]) : 0;
   return {
-    requested: Number(detail?.requested || 0),
-    processed: Number(detail?.processed || 0),
-    syncedDrafts: Number(detail?.syncedDrafts || 0),
-    successful: Number(detail?.successful || 0),
-    deferred: Number(detail?.deferred || 0),
+    requested: count("requested"),
+    queued: count("queued"),
+    queuedReady: count("queuedReady"),
+    queuedProduction: count("queuedProduction"),
+    dispatched: count("dispatched"),
+    dispatchFailures: count("dispatchFailures"),
+    publishedToday: count("publishedToday"),
+    reserved: count("reserved"),
+    recovered: count("recovered"),
+    processed: count("processed"),
+    syncedDrafts: count("syncedDrafts"),
+    successful: count("successful"),
+    deferred: count("deferred"),
+    workerBypassConfigured:
+      typeof detail?.workerBypassConfigured === "boolean"
+        ? detail.workerBypassConfigured
+        : null,
     resultStates: results.reduce((acc: Record<string, number>, item: any) => {
       const key = String(item?.state || "unknown");
       acc[key] = (acc[key] || 0) + 1;
@@ -131,6 +145,9 @@ export async function GET() {
           autoPublish: config.autoPublish,
           dailyArticleLimit: config.dailyArticleLimit,
           primaryBlogName: process.env.PRIMARY_BLOGGER_NAME?.trim() || "장학짱",
+          workerBypassConfigured: Boolean(
+            process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim(),
+          ),
         },
         operational,
         budget: {
