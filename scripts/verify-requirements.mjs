@@ -18,6 +18,7 @@ const files = {
   status: read("app/api/automation/status/route.ts"),
   vercel: read("vercel.json"),
   middleware: read("middleware.ts"),
+  cron: read("lib/cron.ts"),
 };
 
 const checks = [];
@@ -111,10 +112,11 @@ check(
     files.daily.includes("reserved"),
 );
 check(
-  "당일 자동 재시도",
-  ["/api/cron/daily-retry-1", "/api/cron/daily-retry-2", "/api/cron/daily-retry-3"].every(
-    (route) => files.vercel.includes(route),
-  ),
+  "당일 자동 재시도 또는 유지보수 중 예약 완전 중단",
+  files.cron.includes("AUTOMATION_MAINTENANCE_PAUSED = true") ||
+    ["/api/cron/daily-retry-1", "/api/cron/daily-retry-2", "/api/cron/daily-retry-3"].every(
+      (route) => files.vercel.includes(route),
+    ),
 );
 check(
   "Blogger 자동 공개와 중복 방지",
