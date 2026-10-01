@@ -63,6 +63,15 @@
 
 ## 변경 기록
 
+### 2026-10-01 — 예약 자동화 유지보수 일시 중단
+- 증상/요구: 반복적인 작성·근거·형식 오류로 게시 성공률이 낮고 API 호출 비용이 누적되어, 오류를 충분히 개선하기 전까지 자동 등록과 예약 실행을 중단하기로 함.
+- 확인 근거: 중단 직전 Production health에서 `published=0`, `working=0`, `needs_review=3`, `source_blocked=10`, `errors=15`를 확인했고 최근 worker 오류에 1,500자 미만, 필수 내용 누락, 출처 확보 실패, 제목 누락 등이 남아 있었음.
+- 원인: 단일 원인이 아니라 작성 길이/필수 내용/근거 연결/제목·구조 생성 실패가 복합적으로 남아 있어 반복 재시도가 비용 대비 성공률을 낮추는 상태.
+- 변경: `vercel.json`에서 모든 Vercel Cron 일정을 제거하고, `lib/cron.ts`의 공통 Cron 진입점에 `AUTOMATION_MAINTENANCE_PAUSED=true` 차단을 추가해 실수 또는 외부 호출로도 예약 작업이 AI 호출을 시작하지 못하게 함. health 응답에 `maintenancePaused`를 노출하고 README에 유지보수 중단 상태를 문서화함. 대기 작업·기존 원고·진단 데이터는 삭제하지 않음.
+- 검증: 회귀 검증 스크립트를 유지보수 모드에서도 통과하도록 갱신했고, Production health에서 `automation.maintenancePaused=true` 확인.
+- 배포: GitHub `main` 최신 누적 커밋 `b2bea8ad5afdbde55ae646b956ee45b1c1e65479`, Vercel Production `dpl_ERJezf32UA11ZRG7v3xrFBEhegfe` = READY. 운영 주소 `https://google-blogger-agent-final-v26.vercel.app`.
+- 후속 확인: 예약 자동화는 다시 켜지 않는다. 먼저 최근 실패 유형을 분리해 회귀 테스트를 추가하고, 비용이 통제된 단건 수동 테스트로 조사→작성→부분수정→검수→Blogger 저장/공개 전체 흐름의 성공을 확인한 뒤 사용자 승인 후 재개한다.
+
 ### 2026-10-01 — 상시형 검색 수요·API 비용 보호 개선
 - 증상/요구: 사용자가 API 잔액을 충전한 뒤에도 높은 비용과 과거 반복 오류를 우려. 단발성 스포츠·연예·사회 이슈 대신 최근 한 달 관심 신호와 반복 검색 수요에 기반한 정보형 블로그 계획 요청.
 - 확인 근거: 현재 체크아웃 `lib/planning.ts`, `lib/production.ts`, 일일 cron/worker 코드, 2026-10-01 02:14 KST Production health. 당시 최근 worker 오류는 Anthropic 잔액 부족이었고 이전 기록에는 OpenAI 잔액 부족이 있었다. health의 `aiCostWon`은 설정 단가 기반 추정 ledger로 실제 공급자 청구액이 아니다.
