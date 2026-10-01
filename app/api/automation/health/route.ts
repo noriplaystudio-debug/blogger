@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { AUTOMATION_MAINTENANCE_PAUSED } from "@/lib/cron";
 import {
   getAutomationConfig,
   getOperationalStats,
@@ -153,6 +154,7 @@ export async function GET() {
         korea: nowKst,
         automation: {
           enabled: config.enabled,
+          maintenancePaused: AUTOMATION_MAINTENANCE_PAUSED,
           autoPublish: config.autoPublish,
           dailyArticleLimit: config.dailyArticleLimit,
           primaryBlogName: process.env.PRIMARY_BLOGGER_NAME?.trim() || "장학짱",
