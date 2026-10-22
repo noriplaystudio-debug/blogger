@@ -63,6 +63,15 @@
 
 ## 변경 기록
 
+### 2026-10-22 — Seed v5.3 rights review verified in real browser
+- 근거: https://github.com/noriplaystudio-debug/blogger/actions/runs/39748164227 ; tested source 548baefbc34915573f1f9c05aa3887dbe8742f45.
+- 확인: 정적 62모듈·API/SQLite/템플릿 9묶음·QA 도구 검사, 실제 doctor 2단계·이용 흐름 17단계 모두 통과. 새 권리 신고·별도 동의·심사 없는 승인 거부·공개/결제 고지·주문 당시 안내 포함. pageErrors 0. 의도된 응답 유실/400/외부 자원 차단 메시지는 기록 유지.
+- 증거: 실제 PNG 18개·원본 trace 7개. 원본 12412656251(35,426,688 bytes)은 GitHub 보존, 작은 검토본 12412621308(12,535,953 bytes)을 내려받아 SHA-256/ZIP 무결성/경로 검사 및 실제 화면 확인. 자세한 기록 seed-market/docs/QA_PATENT_V5_3.md.
+- 변경: 검증/특허 운영 문서와 이력만 갱신. 검사한 앱·테스트 소스는 변경하지 않음.
+- 한계: 수동 자료 대조. KIPRIS 자동 조회·변리사 법률 판단·실제 OAuth/PG/권리 이전·실물 휴대폰 검증 아님.
+- 배포: QA 브랜치만 갱신. 서비스·원격 DB 미배포, Blogger 운영·main·중지된 자동화 변경 없음.
+
+
 ### 2026-10-22 — Seed QA Korean font download
 - 근거: https://github.com/noriplaystudio-debug/blogger/actions/runs/39747369688 (aa7e640931dd1127108950f022d100dec2514edd). 한글 글꼴 다운로드 3분 시간 초과로 앱/브라우저 검사는 실행 전 중단.
 - 원인: Ubuntu 미러에서 61.2MB fonts-noto-cjk 다운로드가 완료되지 않음. 기능 오류/성공으로 판정하지 않음.
