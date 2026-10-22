@@ -1,5 +1,15 @@
 # 프로젝트 변경 이력
 
+## 2026-10-22 KST · v5.3.0 · 판매 등록 특허·권리 자료 검토
+
+- 요구: 판매할 아이디어의 특허권 관련 검토를 판매 등록 흐름에 포함한다.
+- 확인: 기존 심사는 창작·품질 일반 확인만 받았으며 특허 현황·권한·FTO 구분과 주문 당시 고지가 없었다. 특허성, 소유·판매 권한, 비침해 검토를 구분한다.
+- 변경: 판매자 필수 신고/별도 동의, 운영자 세 항목 기록 및 공개 승인 게이트, 공식 링크/확인일, 운영 전용 자료 격리, 구매 전 안내·서버 버전 검사·주문 고정 기록, 동시 수정/심사/결제 차단, 키 등록 준비 상태. KIPRIS 자동 조회·법률 판단은 미연결이며 기존 글/주문에 심사를 소급 생성하지 않는다.
+- 파일: server/patents.mjs·operations.sql·listings.mjs·operations.mjs·api.mjs·policy.mjs, db/schema.ts; public/assets/patent-policy.js·patents.js·patents.css 및 판매/상세/결제/심사/영수증 연결; tests/patents.test.mjs와 기존 통합/브라우저 시나리오; 환경 예시·문서.
+- 검증: 로컬 정적 62모듈, API/DB/템플릿 9묶음과 QA 도구 검사 통과. 실제 브라우저는 이번 소스로 GitHub Actions에서 후속 실행한다. 기존 v5.2.0의 17/17 성공과 구분한다.
+- 배포: 서비스·원격 DB 미배포. 허용된 QA 브랜치로만 반영해 실제 화면 검사 예정. Blogger 운영·main·중지된 자동화 유지.
+
+
 ## 2026-10-22 KST · v5.2.0 · GitHub 실제 브라우저 17/17 통과
 
 - 근거: https://github.com/noriplaystudio-debug/blogger/actions/runs/39740383010; 검사 소스 `e6d9b15c67359f27dd814d3b2661992ef9145042`. doctor와 17개 전체 여정 성공, pageErrors 0, 실제 스크린샷 17개·trace 7개.

@@ -1,3 +1,4 @@
+import {patentDraft,patentReview} from "./patent-fixtures.mjs";
 import assert from "node:assert/strict";
 import {createLocalDB} from "../server/sqlite.mjs";
 import {handleAPI} from "../server/api.mjs";
@@ -34,15 +35,15 @@ for(const [user,role] of [["seller","seller"],["other-seller","seller"],["buyer"
 const config=await good(call("/api/config"));assert.equal(config.priceGuidance.mode,"advisory");
 const png=Uint8Array.from(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=","base64"));
 const response=await handleAPI(new Request("https://seed.test/api/uploads?kind=private",{method:"POST",headers:{"Content-Type":"image/png"},body:png}),env,{identity:{id:"seller"}});assert.equal(response.status,201);const image=await response.json();
-const listing={title:"가격 자유 설정을 확인하는 아이디어",summary:"권장 가격보다 높은 판매가를 자유롭게 등록하고 그 기준을 구매 전에 확인할 수 있는 테스트 기획입니다.",category:"product",topic:"product-home",maturity:"seed",viewPrice:500000,usePrice:1500000,tags:[],problem:"가정에서 자주 사용하는 물건의 보관 공간을 줄이고 이용 동선을 편하게 구성하기 위한 기획입니다. ".repeat(2),solution:"SECRET-PAID-SOLUTION "+"구조를 접을 수 있도록 설계하고 사용 흐름을 단계별로 설명해 제품 제작을 준비하는 가상의 기획입니다. ".repeat(3),audience:"작은 공간에서 수납을 효율적으로 정리하고 싶은 성인 사용자입니다.",execution:"모형 제작과 실제 사용자 체험을 준비하고 필요한 자원과 비용을 조사한 뒤 기록을 바탕으로 설계를 보완합니다. ".repeat(3),deliverables:["제품 구조 기획서"],imageIds:[image.id],originality:"직접 만든 기획과 자체 제작한 참고 이미지만 사용하는 테스트입니다.",validationNote:"실제 사용자 조사는 아직 진행하지 않았으며 조사 방법을 준비한 단계입니다.",risks:"제작 비용과 안전성을 별도로 확인해야 하는 초기 단계입니다.",sellerAgreement:true,sellerTermsVersion:SELLER_TERMS_VERSION,feeQuote:config.commerce,priceGuide:{recommendedMax:100000000,mode:"enforced"}};
+const listing={title:"가격 자유 설정을 확인하는 아이디어",summary:"권장 가격보다 높은 판매가를 자유롭게 등록하고 그 기준을 구매 전에 확인할 수 있는 테스트 기획입니다.",category:"product",topic:"product-home",maturity:"seed",viewPrice:500000,usePrice:1500000,tags:[],problem:"가정에서 자주 사용하는 물건의 보관 공간을 줄이고 이용 동선을 편하게 구성하기 위한 기획입니다. ".repeat(2),solution:"SECRET-PAID-SOLUTION "+"구조를 접을 수 있도록 설계하고 사용 흐름을 단계별로 설명해 제품 제작을 준비하는 가상의 기획입니다. ".repeat(3),audience:"작은 공간에서 수납을 효율적으로 정리하고 싶은 성인 사용자입니다.",execution:"모형 제작과 실제 사용자 체험을 준비하고 필요한 자원과 비용을 조사한 뒤 기록을 바탕으로 설계를 보완합니다. ".repeat(3),deliverables:["제품 구조 기획서"],imageIds:[image.id],originality:"직접 만든 기획과 자체 제작한 참고 이미지만 사용하는 테스트입니다.",validationNote:"실제 사용자 조사는 아직 진행하지 않았으며 조사 방법을 준비한 단계입니다.",risks:"제작 비용과 안전성을 별도로 확인해야 하는 초기 단계입니다.",sellerAgreement:true,sellerTermsVersion:SELLER_TERMS_VERSION,patent:patentDraft,feeQuote:config.commerce,priceGuide:{recommendedMax:100000000,mode:"enforced"}};
 const created=await good(post("/api/ideas","seller",listing,"above-guide-listing"),201),ideaId=created.id;
-await good(post("/api/admin/ideas/"+ideaId+"/review","operator",{status:"approved",expectedStatus:"pending",expectedVersion:1,reason:"가격은 판매자가 선택하며 공개 자료와 제공 범위를 확인한 테스트입니다."}));
+await good(post("/api/admin/ideas/"+ideaId+"/review","operator",{status:"approved",patentReview,expectedStatus:"pending",expectedVersion:1,reason:"가격은 판매자가 선택하며 공개 자료와 제공 범위를 확인한 테스트입니다."}));
 const publicIdea=(await good(call("/api/ideas/"+ideaId))).idea;
 assert.equal(publicIdea.viewPrice,500000);assert.equal(publicIdea.usePrice,1500000);
 assert.equal(publicIdea.priceGuide.view.recommendedMax,3000);assert.equal(publicIdea.priceGuide.use.recommendedMax,30000);
 assert.equal(publicIdea.priceGuide.view.above,true);assert.equal(publicIdea.priceGuide.version,PRICE_GUIDE_VERSION);
 assert.ok(!JSON.stringify(publicIdea).includes("SECRET-PAID-SOLUTION"));assert.equal((await call("/api/ideas/"+ideaId+"/details",{user:"buyer"})).status,403);
-const buy=(kind,key)=>post("/api/ideas/"+ideaId+"/checkout","buyer",{kind,agree:true,termsVersion:TERMS_VERSION,priceGuide:{view:{recommendedMax:500000}}},key);
+const buy=async(kind,key)=>post("/api/ideas/"+ideaId+"/checkout","buyer",{kind,agree:true,termsVersion:TERMS_VERSION,patentStamp:(await call("/api/ideas/"+ideaId,{user:"buyer"})).data.patentDisclosure?.stamp,priceGuide:{view:{recommendedMax:500000}}},key);
 const order=(await good(buy("view","above-guide-view"),201)).order;
 assert.equal(order.amount,500000);
 const receipt=await good(call("/api/orders/"+order.id,{user:"buyer"}));

@@ -1,6 +1,7 @@
 import {fail} from "./policy.mjs";
 import {commerceSettings,sellerFinance,eligibleSQL,iso,isOperator} from "./commerce.mjs";
 import {adminAuthSettings} from "../auth/settings.mjs";
+import {patentRecord,validatePatentReview,patentIntegrationSettings} from "./patents.mjs";
 const activeCase="status IN ('open','reviewing')";
 function text(value,min,max,label){
   if(typeof value!=="string"||value.trim().length<min||value.trim().length>max)fail(400,label+"은 "+min+"~"+max+"자로 입력해 주세요.");
@@ -75,7 +76,7 @@ export async function handleOperations({path,method,request,env,context,db,ident
   }
   if(!path.startsWith("/api/admin/"))return null;
   admin();
-  if(path==="/api/admin/settings"&&method==="GET")return json({commerce:await commerceSettings(db),auth:adminAuthSettings(env,context.authBackend||"sites"),paymentMode:env.PAYMENTS_MODE==="test"?"test":"disabled"});
+  if(path==="/api/admin/settings"&&method==="GET")return json({commerce:await commerceSettings(db),auth:adminAuthSettings(env,context.authBackend||"sites"),patent:patentIntegrationSettings(env),paymentMode:env.PAYMENTS_MODE==="test"?"test":"disabled"});
   if(path==="/api/admin/settings"&&method==="POST"){
     const data=await bodyJSON(request);
     for(const k of ["viewBps","useBps"])if(!Number.isSafeInteger(data[k])||data[k]<0||data[k]>5000)fail(400,"수수료율은 0~50% 범위의 basis point 정수로 입력해 주세요.");
@@ -105,11 +106,16 @@ export async function handleOperations({path,method,request,env,context,db,ident
     const quality=await db.prepare("SELECT version FROM idea_quality WHERE idea_id=?").bind(id).first();
     if(data.expectedVersion!==(quality?.version||0))fail(409,"판매자가 등록 내용을 수정했어요. 최신 자료를 다시 확인해 주세요.");
     if(data.expectedStatus!==(old?.status||"approved"))fail(409,"다른 운영자가 검토 상태를 변경했어요. 새로고침해 주세요.");
-    const result=await db.batch([
-      db.prepare("INSERT INTO idea_reviews(idea_id,status,reason,reviewer_id,reviewed_at,created_at) SELECT ?,?,?,?,?,? WHERE COALESCE((SELECT version FROM idea_quality WHERE idea_id=?),0)=? ON CONFLICT(idea_id) DO UPDATE SET status=excluded.status,reason=excluded.reason,reviewer_id=excluded.reviewer_id,reviewed_at=excluded.reviewed_at WHERE idea_reviews.status=? AND COALESCE((SELECT version FROM idea_quality WHERE idea_id=?),0)=?").bind(id,data.status,reason,identity.id,time,time,id,data.expectedVersion,data.expectedStatus,id,data.expectedVersion),
-      audit(db,identity.id,"idea.review",id,{status:data.status,reason,version:data.expectedVersion},time,"changes()=1")
-    ]);
-    if(!result[0].meta.changes)fail(409,"검토 상태가 바뀌었어요. 다시 확인해 주세요.");
+    const patent=await patentRecord(db,id),patentReview=validatePatentReview(data.patentReview,patent,data.status),reviewToken=crypto.randomUUID(),stmts=[];
+    if(patent&&patent.listing_version!==data.expectedVersion)fail(409,"특허 신고와 등록 내용의 버전이 달라요. 자료를 다시 확인해 주세요.");
+    if(patentReview)stmts.push(db.prepare("UPDATE idea_patents SET review_state=?,review=?,review_token=?,reviewer_id=?,reviewed_at=?,revision=revision+1 WHERE idea_id=? AND listing_version=? AND revision=? AND EXISTS(SELECT 1 FROM idea_quality WHERE idea_id=? AND version=?) AND EXISTS(SELECT 1 FROM idea_reviews WHERE idea_id=? AND status=?)").bind(patentReview.outcome,JSON.stringify(patentReview),reviewToken,identity.id,time,id,data.expectedVersion,patent.revision,id,data.expectedVersion,id,data.expectedStatus));
+    const patentGate=patent?"EXISTS(SELECT 1 FROM idea_patents WHERE idea_id=? AND listing_version=? AND "+(patentReview?"review_token=?":"revision=?")+(data.status==="approved"?" AND review_state='recorded'":"")+")":"NOT EXISTS(SELECT 1 FROM idea_patents WHERE idea_id=?)";
+    const patentParams=patent?[id,data.expectedVersion,patentReview?reviewToken:patent.revision]:[id];
+    const writeIndex=stmts.length;
+    stmts.push(db.prepare("INSERT INTO idea_reviews(idea_id,status,reason,reviewer_id,reviewed_at,created_at) SELECT ?,?,?,?,?,? WHERE COALESCE((SELECT version FROM idea_quality WHERE idea_id=?),0)=? AND "+patentGate+" ON CONFLICT(idea_id) DO UPDATE SET status=excluded.status,reason=excluded.reason,reviewer_id=excluded.reviewer_id,reviewed_at=excluded.reviewed_at WHERE idea_reviews.status=? AND COALESCE((SELECT version FROM idea_quality WHERE idea_id=?),0)=?").bind(id,data.status,reason,identity.id,time,time,id,data.expectedVersion,...patentParams,data.expectedStatus,id,data.expectedVersion));
+    stmts.push(audit(db,identity.id,"idea.review",id,{status:data.status,reason,version:data.expectedVersion,patentReview},time,"changes()=1"));
+    const result=await db.batch(stmts);
+    if(!result[writeIndex].meta.changes)fail(409,"검토 상태나 특허 자료가 바뀌었어요. 다시 확인해 주세요.");
     return json({status:data.status});
   }
   const decision=path.match(/^\/api\/admin\/cases\/([a-zA-Z0-9-]+)$/);

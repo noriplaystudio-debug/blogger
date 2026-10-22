@@ -1,3 +1,4 @@
+import {patentDraft,patentReview} from "./patent-fixtures.mjs";
 import assert from "node:assert/strict";
 import {mkdir,writeFile} from "node:fs/promises";
 import {createLocalDB} from "../server/sqlite.mjs";
@@ -20,7 +21,7 @@ async function upload(kind="private",user="seller"){
 }
 for(const [user,role] of [["seller","seller"],["seller-two","seller"],["buyer-a","buyer"],["buyer-b","buyer"]])await expect("/api/signup",{user,method:"POST",body:{role,name:user}},201);
 const initialConfig=await expect("/api/config"),image=await upload(),cover=await upload("public");
-const draft={title:"도시 산책을 위한 오디오 기획",summary:"동네의 문화와 장소를 짧은 오디오로 연결하고 방문자가 산책 경로를 선택하도록 돕는 기획입니다.",category:"service",topic:"service-local",domainIds:["local","culture"],maturity:"developed",tags:["산책","오디오"],viewPrice:5000,usePrice:99000,problem:"도시에서 숨은 문화와 장소를 찾기 어렵고 기존 안내 방식으로는 짧은 산책 동선을 파악하기 어렵다는 문제입니다.",solution:"PRIVATE-JOURNEY-DETAIL "+"직접 확인한 장소를 짧은 안내와 동선으로 묶고 사용자의 이용 시간을 기준으로 코스를 제안합니다. ".repeat(3),audience:"주말에 지역 문화를 체험하고 새로운 경로를 걷고 싶은 방문자입니다.",execution:"지역의 장소 세 곳을 직접 확인한 뒤 안내용 원고를 만들고 방문자 다섯 명과 코스를 걸으며 개선 의견을 기록합니다. ".repeat(3),deliverables:["기획서","실행 단계 안내"],imageIds:[image],coverId:cover,originality:"직접 만든 기획과 직접 제작한 참고 이미지로 구성했으며 외부 작품의 원문은 사용하지 않았습니다.",validationNote:"아직 실제 시장성과 수익성을 검증하지 않았으며 첫 사용자 실험을 준비하고 있습니다.",risks:"안내의 정확성과 실제 사용자 수요를 추가 확인해야 합니다.",sellerAgreement:true,sellerTermsVersion:SELLER_TERMS_VERSION,feeQuote:initialConfig.commerce};
+const draft={title:"도시 산책을 위한 오디오 기획",summary:"동네의 문화와 장소를 짧은 오디오로 연결하고 방문자가 산책 경로를 선택하도록 돕는 기획입니다.",category:"service",topic:"service-local",domainIds:["local","culture"],maturity:"developed",tags:["산책","오디오"],viewPrice:5000,usePrice:99000,problem:"도시에서 숨은 문화와 장소를 찾기 어렵고 기존 안내 방식으로는 짧은 산책 동선을 파악하기 어렵다는 문제입니다.",solution:"PRIVATE-JOURNEY-DETAIL "+"직접 확인한 장소를 짧은 안내와 동선으로 묶고 사용자의 이용 시간을 기준으로 코스를 제안합니다. ".repeat(3),audience:"주말에 지역 문화를 체험하고 새로운 경로를 걷고 싶은 방문자입니다.",execution:"지역의 장소 세 곳을 직접 확인한 뒤 안내용 원고를 만들고 방문자 다섯 명과 코스를 걸으며 개선 의견을 기록합니다. ".repeat(3),deliverables:["기획서","실행 단계 안내"],imageIds:[image],coverId:cover,originality:"직접 만든 기획과 직접 제작한 참고 이미지로 구성했으며 외부 작품의 원문은 사용하지 않았습니다.",validationNote:"아직 실제 시장성과 수익성을 검증하지 않았으며 첫 사용자 실험을 준비하고 있습니다.",risks:"안내의 정확성과 실제 사용자 수요를 추가 확인해야 합니다.",sellerAgreement:true,sellerTermsVersion:SELLER_TERMS_VERSION,patent:patentDraft,feeQuote:initialConfig.commerce};
 const attempts=await Promise.all([post("/api/ideas","seller",draft,"seller-submit-first"),post("/api/ideas","seller",draft,"seller-submit-first")]);
 assert.deepEqual(attempts.map(x=>x.status).sort(),[200,201]);
 const id=attempts[0].data.id;assert.equal(id,attempts[1].data.id);
@@ -31,7 +32,7 @@ await expect("/api/listing-requests/seller-submit-first",{user:"seller-two"},404
 await expect("/api/listing-requests/seller-submit-first",{user:"buyer-a"},403);
 assert.equal((await post("/api/ideas","seller",{...draft,title:"다르게 바뀐 도시 산책 기획"},"seller-submit-first")).status,409);
 pass("판매자", "가입 → 비공개 등록 → 응답 유실 조회·동시 재시도, 중복 등록 0건");
-const review=(status,expectedStatus,expectedVersion,environment=env)=>call("/api/admin/ideas/"+id+"/review",{user:"operator",method:"POST",body:{status,expectedStatus,expectedVersion,reason:"공개 소개와 상세 기획 및 참고 이미지의 구성과 권리 안내를 확인했습니다."},environment});
+const review=async(status,expectedStatus,expectedVersion,environment=env)=>call("/api/admin/ideas/"+id+"/review",{user:"operator",method:"POST",body:{status,expectedStatus,expectedVersion,...(status==="approved"?{patentReview:{...patentReview,expectedRevision:(await db.prepare("SELECT revision FROM idea_patents WHERE idea_id=?").bind(id).first()).revision}}:{}),reason:"공개 소개와 상세 기획 및 참고 이미지의 구성과 권리 안내를 확인했습니다."},environment});
 assert.equal((await review("rejected","pending",1)).status,200);
 assert.equal((await expect("/api/account",{user:"seller"})).selling.find(idea=>idea.id===id).canEdit,true);
 const edit=await expect("/api/ideas/"+id+"/edit",{user:"seller"});
@@ -81,7 +82,7 @@ pass("시스템", "이미지 저장소 삭제 실패는 작업 기록을 남기�
 const publicList=await expect("/api/discovery?category=service");assert.ok(publicList.ideas.some(x=>x.id===id));assert.ok(!JSON.stringify(publicList).includes("PRIVATE-JOURNEY-DETAIL"));
 await expect("/api/ideas/"+id+"/bookmark",{user:"buyer-a",method:"POST",body:{}});
 assert.ok((await expect("/api/account",{user:"buyer-a"})).favorites.includes(id));
-const checkout=(user,kind,key)=>post("/api/ideas/"+id+"/checkout",user,{kind,agree:true,termsVersion:TERMS_VERSION},key);
+const checkout=async(user,kind,key)=>post("/api/ideas/"+id+"/checkout",user,{kind,agree:true,termsVersion:TERMS_VERSION,patentStamp:(await call("/api/ideas/"+id,{user})).data.patentDisclosure?.stamp},key);
 assert.equal((await checkout("buyer-a","use","cannot-use-before-view")).status,403);
 const aView=await checkout("buyer-a","view","buyer-a-view-first");assert.equal(aView.status,201);
 const aReplay=await checkout("buyer-a","view","buyer-a-view-first");assert.equal(aReplay.status,200);assert.equal(aReplay.data.order.id,aView.data.order.id);
@@ -126,8 +127,8 @@ await expect("/api/uploads/"+raceImage,{user:"seller",method:"DELETE",environmen
 assert.ok(objects.has("ideas/"+raceImage));assert.equal((await db.prepare("SELECT idea_id FROM uploads WHERE id=?").bind(raceImage).first()).idea_id,raceListing.data.id);
 // Reproduce seller editing after an operator reads version 1 but before approval commits.
 const raceId=raceListing.data.id;let changed=false;
-const reviewRaceDB={...db,prepare(sql){const wrap=statement=>({...statement,_reviewWrite:sql.startsWith("INSERT INTO idea_reviews(idea_id,status,reason"),bind(...args){return wrap(statement.bind(...args));}});return wrap(db.prepare(sql));},async batch(statements){if(statements[0]._reviewWrite&&!changed){changed=true;assert.equal((await post("/api/ideas/"+raceId+"/revise","seller",{...draft,imageIds:[raceImage],coverId:null,feeQuote:(await expect("/api/config")).commerce,expectedVersion:1},"edit-during-review-write")).status,201);}return db.batch(statements);}};
-await expect("/api/admin/ideas/"+raceId+"/review",{user:"operator",method:"POST",body:{status:"approved",expectedStatus:"pending",expectedVersion:1,reason:"운영자가 이전 버전을 보던 사이 수정된 자료의 승인 요청입니다."},environment:{...env,DB:reviewRaceDB}},409);
+const reviewRaceDB={...db,prepare(sql){const wrap=statement=>({...statement,_reviewWrite:sql.startsWith("INSERT INTO idea_reviews(idea_id,status,reason"),bind(...args){return wrap(statement.bind(...args));}});return wrap(db.prepare(sql));},async batch(statements){if(statements.some(statement=>statement._reviewWrite)&&!changed){changed=true;assert.equal((await post("/api/ideas/"+raceId+"/revise","seller",{...draft,imageIds:[raceImage],coverId:null,feeQuote:(await expect("/api/config")).commerce,expectedVersion:1},"edit-during-review-write")).status,201);}return db.batch(statements);}};
+await expect("/api/admin/ideas/"+raceId+"/review",{user:"operator",method:"POST",body:{status:"approved",patentReview,expectedStatus:"pending",expectedVersion:1,reason:"운영자가 이전 버전을 보던 사이 수정된 자료의 승인 요청입니다."},environment:{...env,DB:reviewRaceDB}},409);
 assert.equal((await expect("/api/ideas/"+raceId,{user:"seller"})).idea.reviewStatus,"pending");
 pass("시스템", "업로드 삭제·등록 경쟁과 판매자 수정·운영 승인 경쟁을 DB 쓰기 직전 순서로 재현·차단");
 

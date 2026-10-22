@@ -1,6 +1,7 @@
 import {validateListing,fail,SELLER_TERMS_VERSION,sellerTermsText} from "./policy.mjs";
 import {commerceSettings,listingCommerce} from "./commerce.mjs";
 import {CATALOG,TAXONOMY_VERSION} from "../public/assets/catalog.js";
+import {validatePatentDeclaration,patentRecord,privatePatent,patentDeclarationStatement} from "./patents.mjs";
 
 const digest=async value=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(value)))).map(x=>x.toString(16).padStart(2,"0")).join("");
 const editable="i.status='active' AND r.status IN ('pending','rejected') AND NOT EXISTS(SELECT 1 FROM orders o WHERE o.idea_id=i.id)";
@@ -36,10 +37,10 @@ export async function handleListings({path,method,request,db,member,bodyJSON,jso
     const review=await db.prepare("SELECT reason FROM idea_reviews WHERE idea_id=?").bind(target).first();
     const images=await db.prepare("SELECT id,kind,content_type,size FROM uploads WHERE idea_id=? ORDER BY created_at,id").bind(target).all();
     const commerce=await listingCommerce(db,target);
-    return json({id:target,version:quality.version,reviewReason:review.reason,commerce,sellerTerms:{version:SELLER_TERMS_VERSION,text:sellerTermsText(commerce)},input:{title:idea.title,summary:idea.summary,category:classification?.kind||idea.category,topic:classification?.topic||"",domainIds:JSON.parse(classification?.domains||"[]"),maturity:idea.maturity,viewPrice:idea.view_price,usePrice:idea.use_price,tags:JSON.parse(idea.tags),problem:detail.problem,solution:detail.solution,audience:detail.audience,execution:detail.execution,deliverables:JSON.parse(detail.deliverables),originality:quality.originality,validationNote:quality.validation_note,risks:quality.risks},images:images.results.map((img,index)=>({id:img.id,kind:img.kind,name:(img.kind==="public"?"공개 커버":"기존 상세 이미지 "+(index+1)),type:img.content_type,size:img.size,url:"/api/images/"+img.id,retained:true}))});
+    return json({id:target,version:quality.version,reviewReason:review.reason,commerce,sellerTerms:{version:SELLER_TERMS_VERSION,text:sellerTermsText(commerce)},input:{title:idea.title,summary:idea.summary,category:classification?.kind||idea.category,topic:classification?.topic||"",domainIds:JSON.parse(classification?.domains||"[]"),maturity:idea.maturity,viewPrice:idea.view_price,usePrice:idea.use_price,tags:JSON.parse(idea.tags),problem:detail.problem,solution:detail.solution,audience:detail.audience,execution:detail.execution,deliverables:JSON.parse(detail.deliverables),originality:quality.originality,validationNote:quality.validation_note,risks:quality.risks,patent:privatePatent(await patentRecord(db,target))?.declaration||null},images:images.results.map((img,index)=>({id:img.id,kind:img.kind,name:(img.kind==="public"?"공개 커버":"기존 상세 이미지 "+(index+1)),type:img.content_type,size:img.size,url:"/api/images/"+img.id,retained:true}))});
   }
   if(method!=="POST"||match?.[2]==="edit")return null;
-  const input=await bodyJSON(request),data=validateListing(input),kind=target?"revise":"create";
+  const input=await bodyJSON(request),data={...validateListing(input),patent:validatePatentDeclaration(input.patent)},kind=target?"revise":"create";
   if(input.sellerAgreement!==true||input.sellerTermsVersion!==SELLER_TERMS_VERSION)fail(400,"판매 수수료와 정산 정책을 확인하고 동의해 주세요.");
   if(target&&(!Number.isSafeInteger(input.expectedVersion)||input.expectedVersion<1))fail(400,"수정할 등록 버전을 확인해 주세요.");
   const suppliedKey=request.headers.get("Idempotency-Key");
@@ -94,6 +95,7 @@ export async function handleListings({path,method,request,db,member,bodyJSON,jso
     stmts.push(db.prepare("UPDATE idea_reviews SET status='pending',reason=NULL,reviewer_id=NULL,reviewed_at=NULL WHERE idea_id=? AND "+guard).bind(id,...guardParams));
     stmts.push(db.prepare("UPDATE uploads SET idea_id=NULL WHERE idea_id=? AND id NOT IN("+ids.map(()=>"?").join(",")+") AND "+guard).bind(id,...ids,...guardParams));
   }
+  stmts.push(patentDeclarationStatement(db,{id,version,declaration:data.patent,time,guard,guardParams}));
   for(const imageId of ids)stmts.push(db.prepare("UPDATE uploads SET idea_id=? WHERE id=? AND owner_id=? AND idea_id IS NULL AND "+guard).bind(id,imageId,seller.id,...guardParams));
   stmts.push(db.prepare("INSERT INTO audit_events(id,actor_id,action,target_id,detail,created_at) SELECT ?,?,?,?,?,? WHERE "+guard).bind("event-"+crypto.randomUUID(),seller.id,"listing."+kind,id,JSON.stringify({version,contentHash}),time,...guardParams));
   await db.batch(stmts);

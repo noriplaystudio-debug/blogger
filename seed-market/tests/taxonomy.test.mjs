@@ -1,3 +1,4 @@
+import {patentDraft,patentReview} from "./patent-fixtures.mjs";
 import assert from "node:assert/strict";
 import {readFile} from "node:fs/promises";
 import {createLocalDB} from "../server/sqlite.mjs";
@@ -30,14 +31,14 @@ async function call(path,{user,method="GET",body}={}){
 for(const [user,role] of [["seller","seller"],["buyer","buyer"]])assert.equal((await call("/api/signup",{user,method:"POST",body:{role,name:user}})).status,201);
 const png=Uint8Array.from(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=","base64"));
 async function image(){const response=await handleAPI(new Request("https://seed.test/api/uploads?kind=private",{method:"POST",headers:{"Content-Type":"image/png"},body:png}),env,{identity:{id:"seller"}});assert.equal(response.status,201);return (await response.json()).id;}
-const base={title:"종류와 관련 분야를 구분한 구체적인 아이디어",summary:"아이디어의 중심 결과물과 활용 장면을 충분히 소개하는 공개 요약을 작성한 테스트 자료입니다.",maturity:"developed",viewPrice:5000,usePrice:99000,tags:["분류 확인"],problem:"이 구상의 의도와 배경을 구체적으로 설명하고 현재 상태와 해결하려는 과제를 함께 정리합니다. ".repeat(2),solution:"PRIVATE-TYPE-CONTENT "+"아이디어의 핵심 구성과 차별점, 제공할 결과물과 그 동작을 자세히 설명한 상세 자료입니다. ".repeat(3),audience:"구체적인 활용 장면과 대상 사용자를 검토하는 창작자와 실행자입니다.",execution:"실행을 위한 첫 단계와 필요한 자료를 구분하고 시범 진행으로 확인할 가설과 아직 검증하지 않은 부분을 기록합니다. ".repeat(2),deliverables:["구성 설명","실행 계획"],originality:"직접 작성한 기획과 직접 구성한 참고 이미지로 작성한 테스트 자료입니다.",validationNote:"아직 실제 사용성과 수요를 검증하지 않은 단계이며 첫 실험을 계획하고 있습니다.",risks:"실행 조건과 필요한 비용·권리를 추가로 확인해야 합니다.",sellerAgreement:true,sellerTermsVersion:SELLER_TERMS_VERSION,feeQuote:{viewBps:1000,useBps:1000,holdDays:7}};
+const base={title:"종류와 관련 분야를 구분한 구체적인 아이디어",summary:"아이디어의 중심 결과물과 활용 장면을 충분히 소개하는 공개 요약을 작성한 테스트 자료입니다.",maturity:"developed",viewPrice:5000,usePrice:99000,tags:["분류 확인"],problem:"이 구상의 의도와 배경을 구체적으로 설명하고 현재 상태와 해결하려는 과제를 함께 정리합니다. ".repeat(2),solution:"PRIVATE-TYPE-CONTENT "+"아이디어의 핵심 구성과 차별점, 제공할 결과물과 그 동작을 자세히 설명한 상세 자료입니다. ".repeat(3),audience:"구체적인 활용 장면과 대상 사용자를 검토하는 창작자와 실행자입니다.",execution:"실행을 위한 첫 단계와 필요한 자료를 구분하고 시범 진행으로 확인할 가설과 아직 검증하지 않은 부분을 기록합니다. ".repeat(2),deliverables:["구성 설명","실행 계획"],originality:"직접 작성한 기획과 직접 구성한 참고 이미지로 작성한 테스트 자료입니다.",validationNote:"아직 실제 사용성과 수요를 검증하지 않은 단계이며 첫 실험을 계획하고 있습니다.",risks:"실행 조건과 필요한 비용·권리를 추가로 확인해야 합니다.",sellerAgreement:true,sellerTermsVersion:SELLER_TERMS_VERSION,patent:patentDraft,feeQuote:{viewBps:1000,useBps:1000,holdDays:7}};
 const created={};
 for(const [category,data] of Object.entries(CATALOG)){
   const topic=category==="product"?"product-sports":data.topics[0][0];
   const domainIds=["product","software","sports"].includes(category)?["health"]:data.group==="creative"?["culture"]:[];
   const result=await call("/api/ideas",{user:"seller",method:"POST",body:{...base,title:data.label+"에 관한 구체적인 기획 예시",category,topic,domainIds,imageIds:[await image()]}});
   assert.equal(result.status,201,category+": "+JSON.stringify(result.data));created[category]=result.data.id;
-  assert.equal((await call("/api/admin/ideas/"+result.data.id+"/review",{user:"operator",method:"POST",body:{status:"approved",expectedStatus:"pending",expectedVersion:1,reason:"등록 종류와 공개 정보 및 상세 자료의 범위를 확인했습니다."}})).status,200);
+  assert.equal((await call("/api/admin/ideas/"+result.data.id+"/review",{user:"operator",method:"POST",body:{status:"approved",patentReview,expectedStatus:"pending",expectedVersion:1,reason:"등록 종류와 공개 정보 및 상세 자료의 범위를 확인했습니다."}})).status,200);
   const publicData=(await call("/api/ideas/"+result.data.id)).data.idea;
   assert.equal(publicData.category,category);assert.equal(publicData.topic,topic);assert.equal(publicData.classificationSource,"seller");assert.deepEqual(publicData.domainIds,domainIds);
   const record=await db.prepare("SELECT kind,topic,domains,version FROM idea_classification WHERE idea_id=?").bind(result.data.id).first();

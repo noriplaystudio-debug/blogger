@@ -1,3 +1,4 @@
+import {patentDraft,patentReview} from "./patent-fixtures.mjs";
 import assert from "node:assert/strict";
 import {createLocalDB} from "../server/sqlite.mjs";
 import {handleAPI} from "../server/api.mjs";
@@ -24,13 +25,13 @@ async function upload(kind="private",user="seller"){
 const privateImage=await upload(),publicImage=await upload("public");
 const invalidReq=new Request("https://seed.test/api/uploads?kind=private",{method:"POST",headers:{"Content-Type":"image/svg+xml"},body:"<svg></svg>"});
 assert.equal((await handleAPI(invalidReq,env,{identity:{id:"seller"}})).status,400);
-const draft={title:"구체적인 지역 오디오 지도 기획",summary:"지역의 숨은 공간을 발견하고 산책 경로를 기록하는 구체적인 오디오 가이드 서비스입니다.",category:"service",topic:"service-local",maturity:"professional",viewPrice:5000,usePrice:99000,tags:["로컬"],problem:"동네의 이야기를 발견하기 어렵고 산책을 하더라도 늘 같은 곳만 걷게 되는 문제를 해결하려고 합니다.",solution:"SECRET-SOLUTION "+ "검증한 장소 정보를 바탕으로 짧은 산책 오디오를 제작하고 동선별로 연결해 제공합니다. ".repeat(3),audience:"동네의 역사와 공간을 새롭게 경험하고 싶은 산책자입니다.",execution:"각 장소의 정보를 먼저 확인하고 주말 코스 하나를 제작해 사용자 다섯 명에게 체험을 제공합니다. ".repeat(3),deliverables:["서비스 기획서","실행 계획"],imageIds:[privateImage],coverId:publicImage,sellerAgreement:true,sellerTermsVersion:SELLER_TERMS_VERSION,feeQuote:{viewBps:1000,useBps:1000,holdDays:7},originality:"직접 작성한 기획과 직접 제작한 자료이며 별도의 외부 원문을 사용하지 않았습니다.",validationNote:"아직 수익이나 시장성을 검증하지 않았으며 소규모 사용자 실험을 계획하고 있습니다.",risks:"오디오 콘텐츠의 품질과 실제 사용자 수요를 검증해야 합니다."};
+const draft={title:"구체적인 지역 오디오 지도 기획",summary:"지역의 숨은 공간을 발견하고 산책 경로를 기록하는 구체적인 오디오 가이드 서비스입니다.",category:"service",topic:"service-local",maturity:"professional",viewPrice:5000,usePrice:99000,tags:["로컬"],problem:"동네의 이야기를 발견하기 어렵고 산책을 하더라도 늘 같은 곳만 걷게 되는 문제를 해결하려고 합니다.",solution:"SECRET-SOLUTION "+ "검증한 장소 정보를 바탕으로 짧은 산책 오디오를 제작하고 동선별로 연결해 제공합니다. ".repeat(3),audience:"동네의 역사와 공간을 새롭게 경험하고 싶은 산책자입니다.",execution:"각 장소의 정보를 먼저 확인하고 주말 코스 하나를 제작해 사용자 다섯 명에게 체험을 제공합니다. ".repeat(3),deliverables:["서비스 기획서","실행 계획"],imageIds:[privateImage],coverId:publicImage,sellerAgreement:true,sellerTermsVersion:SELLER_TERMS_VERSION,patent:patentDraft,feeQuote:{viewBps:1000,useBps:1000,holdDays:7},originality:"직접 작성한 기획과 직접 제작한 자료이며 별도의 외부 원문을 사용하지 않았습니다.",validationNote:"아직 수익이나 시장성을 검증하지 않았으며 소규모 사용자 실험을 계획하고 있습니다.",risks:"오디오 콘텐츠의 품질과 실제 사용자 수요를 검증해야 합니다."};
 let created=await call("/api/ideas",{user:"seller",method:"POST",body:draft});assert.equal(created.status,201);
 const id=created.data.id;
 assert.equal((await call("/api/ideas/"+id)).status,404);
 assert.equal((await call("/api/images/"+publicImage)).status,403);
-assert.equal((await call("/api/admin/ideas/"+id+"/review",{user:"seller",method:"POST",body:{status:"approved",expectedStatus:"pending",expectedVersion:1,reason:"샘플 정책 검토를 완료했습니다."}})).status,403);
-assert.equal((await call("/api/admin/ideas/"+id+"/review",{user:"operator",method:"POST",body:{status:"approved",expectedStatus:"pending",expectedVersion:1,reason:"테스트용 아이디어와 제공 자료를 확인했습니다."}})).status,200);
+assert.equal((await call("/api/admin/ideas/"+id+"/review",{user:"seller",method:"POST",body:{status:"approved",patentReview,expectedStatus:"pending",expectedVersion:1,reason:"샘플 정책 검토를 완료했습니다."}})).status,403);
+assert.equal((await call("/api/admin/ideas/"+id+"/review",{user:"operator",method:"POST",body:{status:"approved",patentReview,expectedStatus:"pending",expectedVersion:1,reason:"테스트용 아이디어와 제공 자료를 확인했습니다."}})).status,200);
 assert.equal((await call("/api/ideas",{user:"other-seller",method:"POST",body:{...draft}})).status,400);
 assert.equal((await call("/api/ideas",{user:"seller",method:"POST",body:{...draft,imageIds:[]}})).status,400);
 const list=await call("/api/ideas");assert.equal(list.status,200);
@@ -42,7 +43,7 @@ assert.equal((await db.prepare("SELECT count(*) AS n FROM access_records WHERE u
 assert.equal((await call("/api/images/"+publicImage)).status,200);
 console.log("PASS image uploads and summary-only public access");
 
-const checkout=(idea,user,kind,key,extra={})=>call("/api/ideas/"+idea+"/checkout",{user,method:"POST",key,body:{kind,agree:true,termsVersion:TERMS_VERSION,amount:1,...extra}});
+const checkout=async(idea,user,kind,key,extra={})=>call("/api/ideas/"+idea+"/checkout",{user,method:"POST",key,body:{kind,agree:true,termsVersion:TERMS_VERSION,patentStamp:(await call("/api/ideas/"+idea,{user})).data.patentDisclosure?.stamp,amount:1,...extra}});
 assert.equal((await checkout(id,"buyer-b","use","before-view-key")).status,403);
 assert.equal((await checkout(id,"buyer-a","view","no-consent-key",{agree:false})).status,400);
 assert.equal((await checkout(id,"buyer-a","view","old-consent-key",{termsVersion:"old"})).status,400);
@@ -71,7 +72,7 @@ console.log("PASS sold status and revoked detail/image access for other paid vie
 async function newIdea(){
  const image=await upload();
  const res=await call("/api/ideas",{user:"seller",method:"POST",body:{...draft,imageIds:[image],coverId:null}});assert.equal(res.status,201);
- assert.equal((await call("/api/admin/ideas/"+res.data.id+"/review",{user:"operator",method:"POST",body:{status:"approved",expectedStatus:"pending",expectedVersion:1,reason:"테스트용 자료와 공개 요약을 확인했습니다."}})).status,200);
+ assert.equal((await call("/api/admin/ideas/"+res.data.id+"/review",{user:"operator",method:"POST",body:{status:"approved",patentReview,expectedStatus:"pending",expectedVersion:1,reason:"테스트용 자료와 공개 요약을 확인했습니다."}})).status,200);
  return res.data.id;
 }
 const concurrent=await newIdea();

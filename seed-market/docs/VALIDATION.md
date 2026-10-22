@@ -1,5 +1,14 @@
 # v5.2 검증 기록
 
+## v5.3.0 특허·권리 자료 검토 · 2026-10-22
+
+- 로컬 `npm run check`: 62개 JavaScript 모듈·HTML 자산·고유 ID·호스팅 바인딩 통과.
+- `npm test`: 기존 8묶음과 새 특허 Request/API/SQLite 통합 검사 통과. 등록 필수값·보완/전문가 승인 차단·자료 비공개·공식 링크·주문 당시 고정 안내·쓰기 직전 동시 변경 차단·기존 글/주문 처리 포함.
+- `npm run qa:tools-test`: 증거 보존·중단 기록·아티팩트 민감자료 제외 검사 통과.
+- 브라우저 러너 17단계에 새 특허 신고·심사·구매 고지·영수증 확인을 추가했으며 이번 소스의 실제 실행은 후속 기록한다.
+- 서비스 배포·원격 마이그레이션·KIPRIS 실제 API·전문가 판단은 수행하지 않았다.
+
+
 ## 최종 확인 · 2026-10-22 · 실제 브라우저 17/17 통과
 
 [https://github.com/noriplaystudio-debug/blogger/actions/runs/39740383010](https://github.com/noriplaystudio-debug/blogger/actions/runs/39740383010)에서 doctor와 전체 17단계가 모두 통과했다. 검사한 소스는 `e6d9b15c67359f27dd814d3b2661992ef9145042`이며 Node 24.21.0, Chrome 155.0.8059.84, Playwright 1.62.1을 사용했다. 한국어 글꼴을 준비해 실제 캡처의 한글 표시도 확인했다. 스크린샷 17개와 trace 7개를 내려받아 결과 JSON·ZIP 무결성·아티팩트 체크섬을 확인했다.

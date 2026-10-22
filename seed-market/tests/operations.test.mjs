@@ -1,3 +1,4 @@
+import {patentDraft,patentReview} from "./patent-fixtures.mjs";
 import assert from "node:assert/strict";
 import {createLocalDB} from "../server/sqlite.mjs";
 import {handleAPI} from "../server/api.mjs";
@@ -18,14 +19,14 @@ async function listing({approve=true,title="아이디어 등록과 운영 정책
  const response=await handleAPI(new Request("https://seed.test/api/uploads?kind=private",{method:"POST",headers:{"Content-Type":"image/png"},body:png}),env,{identity:{id:"seller"}});
  const image=await response.json();assert.equal(response.status,201);
  const config=(await call("/api/config")).data;
- const body={title,summary:"새로운 서비스의 구체적인 동작 방식과 대상 사용자를 충분히 설명하는 공개 요약입니다.",category:"software",topic:"software-work",maturity:"professional",viewPrice,usePrice,tags:["테스트"],problem:"많은 사람이 반복 업무에 시간을 쓰고 현재 도구로는 이 과정을 충분히 줄이기 어렵다는 문제를 해결합니다.",solution:"구체적인 기획과 핵심 화면을 구성하고 사용자 입력을 단계별로 정리하는 방식으로 문제를 해결합니다. ".repeat(3),audience:"매일 반복되는 업무의 효율을 높이고 싶은 작은 팀과 프로젝트 담당자입니다.",execution:"첫 단계에서는 실제 사용자 다섯 명에게 프로토타입을 보여주고 반복되는 어려움과 개선 의견을 기록합니다. ".repeat(3),deliverables:["상세 기획서"],imageIds:[image.id],sellerAgreement:true,sellerTermsVersion:SELLER_TERMS_VERSION,feeQuote:quote||config.commerce,originality:"직접 작성한 구체적인 서비스 기획과 직접 제작한 참고 이미지입니다.",validationNote:"아직 실제 시장성을 검증하지 않았으며 첫 사용자 실험을 준비하는 단계입니다.",risks:"실제 수요와 도구의 제작 비용을 추가로 확인해야 합니다."};
+ const body={title,summary:"새로운 서비스의 구체적인 동작 방식과 대상 사용자를 충분히 설명하는 공개 요약입니다.",category:"software",topic:"software-work",maturity:"professional",viewPrice,usePrice,tags:["테스트"],problem:"많은 사람이 반복 업무에 시간을 쓰고 현재 도구로는 이 과정을 충분히 줄이기 어렵다는 문제를 해결합니다.",solution:"구체적인 기획과 핵심 화면을 구성하고 사용자 입력을 단계별로 정리하는 방식으로 문제를 해결합니다. ".repeat(3),audience:"매일 반복되는 업무의 효율을 높이고 싶은 작은 팀과 프로젝트 담당자입니다.",execution:"첫 단계에서는 실제 사용자 다섯 명에게 프로토타입을 보여주고 반복되는 어려움과 개선 의견을 기록합니다. ".repeat(3),deliverables:["상세 기획서"],imageIds:[image.id],sellerAgreement:true,sellerTermsVersion:SELLER_TERMS_VERSION,patent:patentDraft,feeQuote:quote||config.commerce,originality:"직접 작성한 구체적인 서비스 기획과 직접 제작한 참고 이미지입니다.",validationNote:"아직 실제 시장성을 검증하지 않았으며 첫 사용자 실험을 준비하는 단계입니다.",risks:"실제 수요와 도구의 제작 비용을 추가로 확인해야 합니다."};
  const result=await call("/api/ideas",{user:"seller",method:"POST",body});
  if(result.status!==201)return result;
  const id=result.data.id;
- if(approve)assert.equal((await call("/api/admin/ideas/"+id+"/review",{user:"operator",method:"POST",body:{status:"approved",expectedStatus:"pending",expectedVersion:1,reason:"공개 요약과 상세 자료 및 권한 고지 항목을 확인했습니다."}})).status,200);
+ if(approve)assert.equal((await call("/api/admin/ideas/"+id+"/review",{user:"operator",method:"POST",body:{status:"approved",patentReview,expectedStatus:"pending",expectedVersion:1,reason:"공개 요약과 상세 자료 및 권한 고지 항목을 확인했습니다."}})).status,200);
  return {id,status:201};
 }
-const checkout=(id,user,kind)=>call("/api/ideas/"+id+"/checkout",{user,method:"POST",key:crypto.randomUUID(),body:{kind,agree:true,termsVersion:TERMS_VERSION}});
+const checkout=async(id,user,kind)=>call("/api/ideas/"+id+"/checkout",{user,method:"POST",key:crypto.randomUUID(),body:{kind,agree:true,termsVersion:TERMS_VERSION,patentStamp:(await call("/api/ideas/"+id,{user})).data.patentDisclosure?.stamp}});
 assert.equal((await call("/api/admin/overview")).status,401);
 assert.equal((await call("/api/admin/overview",{user:"buyer"})).status,403);
 assert.equal((await call("/api/admin/settings",{user:"buyer",method:"POST",body:{viewBps:0,useBps:0,holdDays:1,reason:"모든 수수료를 임의로 바꾸려는 요청입니다."}})).status,403);

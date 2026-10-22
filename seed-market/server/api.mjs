@@ -5,6 +5,7 @@ import {handleListings,listingEditable,editableListingIds} from "./listings.mjs"
 import {buyerAccess} from "./access.mjs";
 import {handleSharing} from "./sharing.mjs";
 import {handleValuations} from "./valuations.mjs";
+import {patentRecord,publicPatent,privatePatent,patentPurchaseGuard} from "./patents.mjs";
 import {PRICE_GUIDE_VERSION,PRICE_LEVELS,priceGuideFor} from "../public/assets/pricing.js";
 import {flushUploadCleanup,discardTemporaryUpload} from "./uploads.mjs";
 import {publicAuthSettings} from "../auth/settings.mjs";
@@ -137,7 +138,8 @@ export async function handleAPI(request,env,context={}){
       const row=await db.prepare(publicSelect+" WHERE i.id=?").bind(id).first();
       const detail=await db.prepare("SELECT deliverables FROM idea_details WHERE idea_id=?").bind(id).first();
       const version=await db.prepare("SELECT version FROM idea_quality WHERE idea_id=?").bind(id).first();
-      return json({idea:publicIdea(row,me?.id===idea.seller_id||isOperator(identity,env)),canView:await accessible(idea),own:me?.id===idea.seller_id,exclusive:me?.id===idea.exclusive_buyer_id&&await accessible(idea),deliverables:JSON.parse(detail.deliverables),commerce:await listingCommerce(db,id),canEdit:me?.id===idea.seller_id&&await listingEditable(db,id,me.id),registrationVersion:version?.version||0});
+      const patent=await patentRecord(db,id);
+      return json({idea:publicIdea(row,me?.id===idea.seller_id||isOperator(identity,env)),patentDisclosure:publicPatent(patent),...(me?.id===idea.seller_id||isOperator(identity,env)?{patentPrivate:privatePatent(patent)}:{}),canView:await accessible(idea),own:me?.id===idea.seller_id,exclusive:me?.id===idea.exclusive_buyer_id&&await accessible(idea),deliverables:JSON.parse(detail.deliverables),commerce:await listingCommerce(db,id),canEdit:me?.id===idea.seller_id&&await listingEditable(db,id,me.id),registrationVersion:version?.version||0});
     }
     if(action==="details"&&method==="GET"){
       auth();if(!await accessible(idea))fail(403,idea.status==="sold"?"독점 사용권이 판매되어 상세 내용을 열람할 수 없어요.":"열람권 결제 후 상세 내용을 볼 수 있어요.");
@@ -168,9 +170,13 @@ export async function handleAPI(request,env,context={}){
       const grant=await db.prepare("SELECT 1 FROM view_grants v LEFT JOIN refunds r ON r.order_id=v.order_id WHERE v.idea_id=? AND v.user_id=? AND r.id IS NULL").bind(id,me.id).first();
       if(input.kind==="view"&&grant)return json({alreadyOwned:true,testNotice:TEST_NOTICE});
       if(input.kind==="use"&&!grant)fail(403,"상세 열람권을 먼저 구매해 주세요.");
+      const patent=await patentRecord(db,id),patentDisclosure=publicPatent(patent),patentGuard=patentPurchaseGuard(patent,id);
+      if(patent&&patent.review_state!=="recorded")fail(409,"특허·권리 자료의 보완 또는 전문가 검토가 필요한 아이디어예요.");
+      if((patent||input.patentStamp!==undefined)&&input.patentStamp!==patentDisclosure.stamp)fail(409,"특허·권리 안내가 변경됐어요. 최신 구매 화면에서 다시 확인해 주세요.");
       const time=now(),amount=input.kind==="view"?idea.view_price:idea.use_price;
-      const insertOrder=db.prepare("INSERT OR IGNORE INTO orders(id,user_id,idea_id,kind,amount,mode,status,created_at) SELECT ?,?,?,?,?,'test','paid',? WHERE EXISTS(SELECT 1 FROM ideas WHERE id=? AND status='active') AND NOT EXISTS(SELECT 1 FROM idea_reviews WHERE idea_id=? AND status!='approved') AND NOT EXISTS(SELECT 1 FROM cases WHERE idea_id=? AND user_id=? AND kind IN ('refund','dispute') AND status IN ('open','reviewing'))"+(input.kind==="view"?" AND NOT EXISTS(":" AND EXISTS(")+"SELECT 1 FROM view_grants v LEFT JOIN refunds r ON r.order_id=v.order_id WHERE v.idea_id=? AND v.user_id=? AND r.id IS NULL)").bind(oid,me.id,id,input.kind,amount,time,id,id,id,me.id,id,me.id);
+      const insertOrder=db.prepare("INSERT OR IGNORE INTO orders(id,user_id,idea_id,kind,amount,mode,status,created_at) SELECT ?,?,?,?,?,'test','paid',? WHERE EXISTS(SELECT 1 FROM ideas WHERE id=? AND status='active') AND NOT EXISTS(SELECT 1 FROM idea_reviews WHERE idea_id=? AND status!='approved') AND NOT EXISTS(SELECT 1 FROM cases WHERE idea_id=? AND user_id=? AND kind IN ('refund','dispute') AND status IN ('open','reviewing'))"+(input.kind==="view"?" AND NOT EXISTS(":" AND EXISTS(")+"SELECT 1 FROM view_grants v LEFT JOIN refunds r ON r.order_id=v.order_id WHERE v.idea_id=? AND v.user_id=? AND r.id IS NULL) AND "+patentGuard.sql).bind(oid,me.id,id,input.kind,amount,time,id,id,id,me.id,id,me.id,...patentGuard.params);
       const stmts=[insertOrder];
+      stmts.push(db.prepare("INSERT OR IGNORE INTO order_patent_disclosures(order_id,snapshot,policy_version,created_at) SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM orders WHERE id=? AND idea_id=? AND user_id=?)").bind(oid,JSON.stringify(patentDisclosure),patentDisclosure.policyVersion,time,oid,id,me.id));
       const guidance=priceGuideFor(publicIdea(await db.prepare(publicSelect+" WHERE i.id=?").bind(id).first()));
       stmts.push(db.prepare("INSERT OR IGNORE INTO order_price_guidance(order_id,guidance,created_at) SELECT ?,?,? WHERE EXISTS(SELECT 1 FROM orders WHERE id=? AND idea_id=? AND user_id=?)").bind(oid,JSON.stringify(guidance),time,oid,id,me.id));
       if(input.kind==="view")stmts.push(db.prepare("INSERT INTO view_grants(idea_id,user_id,order_id,created_at) SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM orders WHERE id=? AND idea_id=? AND user_id=? AND kind='view') ON CONFLICT(idea_id,user_id) DO UPDATE SET order_id=excluded.order_id,created_at=excluded.created_at WHERE EXISTS(SELECT 1 FROM refunds WHERE order_id=view_grants.order_id)").bind(id,me.id,oid,time,oid,id,me.id));
@@ -183,6 +189,7 @@ export async function handleAPI(request,env,context={}){
       await db.batch(stmts);
       const order=await db.prepare("SELECT * FROM orders WHERE id=?").bind(oid).first();
       if(!order){
+        const latestPatent=await patentRecord(db,id);if(publicPatent(latestPatent).stamp!==patentDisclosure.stamp||latestPatent&&latestPatent.review_state!=="recorded")fail(409,"특허·권리 안내가 변경돼 결제를 진행하지 않았어요. 최신 자료를 다시 확인해 주세요.");
         if(input.kind==="view"&&await db.prepare("SELECT 1 FROM view_grants v LEFT JOIN refunds r ON r.order_id=v.order_id WHERE v.idea_id=? AND v.user_id=? AND r.id IS NULL").bind(id,me.id).first())return json({alreadyOwned:true,testNotice:TEST_NOTICE});
         fail(409,"다른 구매자가 먼저 사용권을 구매했어요. 결제는 발생하지 않았습니다.");
       }
@@ -203,7 +210,8 @@ export async function handleAPI(request,env,context={}){
     const hasView=Boolean(await db.prepare("SELECT 1 FROM view_grants v LEFT JOIN refunds r ON r.order_id=v.order_id WHERE v.idea_id=? AND v.user_id=? AND r.id IS NULL").bind(order.idea_id,me.id).first());
     const hasUse=Boolean(await db.prepare("SELECT 1 FROM licenses l LEFT JOIN refunds r ON r.order_id=l.order_id WHERE l.idea_id=? AND l.user_id=? AND r.id IS NULL").bind(order.idea_id,me.id).first());
     const guidance=await db.prepare("SELECT guidance FROM order_price_guidance WHERE order_id=?").bind(order.id).first();
-    return json({order:{...order,title:idea.title,effective_status:refund?"refunded":"paid"},pledge,financials,refund,priceGuide:guidance?JSON.parse(guidance.guidance):null,firstAccessedAt:access.firstAccessedAt,access:buyerAccess(idea,{hasView,hasUse,hasOrders:true,orderId:order.id})});
+    const patent=await db.prepare("SELECT snapshot FROM order_patent_disclosures WHERE order_id=?").bind(order.id).first();
+    return json({order:{...order,title:idea.title,effective_status:refund?"refunded":"paid"},pledge,financials,refund,patentDisclosure:patent?JSON.parse(patent.snapshot):null,priceGuide:guidance?JSON.parse(guidance.guidance):null,firstAccessedAt:access.firstAccessedAt,access:buyerAccess(idea,{hasView,hasUse,hasOrders:true,orderId:order.id})});
   }
   if(path==="/api/account"&&method==="GET"){
     member();

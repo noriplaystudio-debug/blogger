@@ -1,8 +1,10 @@
 import {CATALOG,TOPICS,DOMAINS,TAXONOMY_VERSION,briefFor,groupedKindOptions,MATURITY_LABELS} from "./catalog.js";
 import {escapeHtml as h} from "./format.js";
 import {priceGuideFor,priceGuideHTML} from "./pricing.js";
+import {PATENT_FIELDS,patentFromValues,patentToValues,patentDeclarationIssues} from "./patent-policy.js";
+import {patentSellerHTML,patentSellerAckHTML,patentSellerSummaryHTML} from "./patents.js";
 
-const TEXT_FIELDS={title:80,summary:300,category:20,topic:40,maturity:20,tags:60,problem:6000,solution:10000,audience:2000,execution:10000,deliverables:485,originality:4000,validationNote:4000,risks:2000,viewPrice:12,usePrice:12};
+const TEXT_FIELDS={...PATENT_FIELDS,title:80,summary:300,category:20,topic:40,maturity:20,tags:60,problem:6000,solution:10000,audience:2000,execution:10000,deliverables:485,originality:4000,validationNote:4000,risks:2000,viewPrice:12,usePrice:12};
 export function parseStudioDraft(raw,owner){
   try{
     if(typeof raw!=="string"||raw.length>80000)return null;
@@ -23,7 +25,7 @@ export function studioHTML({config,header,icon}){
   return header("아이디어를 기회로 만드는 작업실","SELLER STUDIO")+`
     <div class="studio-intro"><p>공개할 소개와 보호할 자료를 나누어 작성하세요.<br>등록 후 운영 검토를 거쳐 마켓에 공개돼요.</p><div><div class="draft-actions"><button type="button" data-studio="save">${icon("download")} 이 기기에 임시저장</button></div><span class="draft-status" id="draft-status" role="status">작성 내용은 이 탭에서 유지돼요. 이미지는 저장되지 않아요.</span></div></div>
     <div class="draft-notice" id="draft-notice" hidden><span>이 기기에 저장한 작성본이 있어요. 이미지는 다시 첨부해야 해요.</span><button type="button" data-studio="restore">불러오기</button><button type="button" data-studio="discard">저장본 삭제</button></div>
-    <div class="studio-layout"><aside class="studio-sidebar"><nav class="studio-step-list" aria-label="판매 등록 단계">${["공개 소개","상세 자료","가격 · 조건","최종 확인"].map((label,index)=>`<button type="button" class="studio-step" data-studio="step" data-step="${index}" aria-controls="studio-panel-${index}" ${index===0?'aria-current="step"':""}><span class="step-number">${index+1}</span><span>${label}</span></button>`).join("")}</nav><p class="studio-progress-label">작성 준비도 <strong id="studio-percent">0%</strong></p><progress class="studio-progress" id="studio-progress" max="100" value="0" aria-label="필수 자료 작성 준비도"></progress><div class="disclosure-guide"><div><strong>${icon("grid")} 요약은 무료로</strong><p>제목·요약·태그·커버·가격은 누구나 볼 수 있어요.</p></div><div><strong>${icon("lock")} 기획은 권한으로</strong><p>상세 본문과 참고 이미지는 열람 권한을 확인해 제공해요.</p></div></div></aside>
+    <div class="studio-layout"><aside class="studio-sidebar"><nav class="studio-step-list" aria-label="판매 등록 단계">${["공개 소개","상세 자료 · 권리","가격 · 조건","최종 확인"].map((label,index)=>`<button type="button" class="studio-step" data-studio="step" data-step="${index}" aria-controls="studio-panel-${index}" ${index===0?'aria-current="step"':""}><span class="step-number">${index+1}</span><span>${label}</span></button>`).join("")}</nav><p class="studio-progress-label">작성 준비도 <strong id="studio-percent">0%</strong></p><progress class="studio-progress" id="studio-progress" max="100" value="0" aria-label="필수 자료 작성 준비도"></progress><div class="disclosure-guide"><div><strong>${icon("grid")} 요약은 무료로</strong><p>제목·요약·태그·커버·가격은 누구나 볼 수 있어요.</p></div><div><strong>${icon("lock")} 기획은 권한으로</strong><p>상세 본문과 참고 이미지는 열람 권한을 확인해 제공해요.</p></div></div></aside>
     <form id="idea-form" class="idea-form studio-form" novalidate>
       <section class="studio-panel" id="studio-panel-0" aria-labelledby="studio-heading-0"><h3 id="studio-heading-0" tabindex="-1">첫인상을 만드는 공개 소개</h3><p class="panel-description">무엇을 해결하는 기획인지 알려주세요. 핵심 노하우는 다음 단계의 상세 자료에 담아요.</p><div class="studio-fields">
         <div class="field"><div class="field-label-line"><label for="idea-title">아이디어 제목 <span class="required-dot">*</span></label><span class="counter" data-counter="title" id="counter-title">0 / 80</span></div><input id="idea-title" name="title" required minlength="6" maxlength="80" aria-describedby="counter-title" placeholder="예: 접이식 주방 도구 / 짧은 곡의 편곡 콘셉트"></div>
@@ -40,10 +42,10 @@ export function studioHTML({config,header,icon}){
         ${field("execution","실행 계획과 검증 방법",80,10000,"첫 실행 단계, 필요한 자원과 일정, 가설을 확인할 방법을 적어주세요.")}
         <div class="field"><label for="idea-deliverables">구매자가 받게 될 자료 *</label><textarea id="idea-deliverables" name="deliverables" required maxlength="485" placeholder="서비스 기획서&#10;핵심 화면 구성&#10;4주 실행 로드맵"></textarea><span class="hint">한 줄에 한 가지, 최대 6개 · 항목당 80자. 자료의 이름은 무료로 공개돼요.</span></div>
         ${upload("private","상세 참고 이미지 *")}
-        <div class="quality-section"><h4>창작 근거와 검증 현황</h4><p>확인한 사실과 미확인 가설을 구분하면 구매자가 자료를 판단하는 데 도움이 돼요. 아래 내용도 상세 자료에 포함돼요.</p>${quality}</div>
+        <div class="quality-section"><h4>창작 근거와 검증 현황</h4><p>확인한 사실과 미확인 가설을 구분하면 구매자가 자료를 판단하는 데 도움이 돼요. 아래 내용도 상세 자료에 포함돼요.</p>${quality}</div>${patentSellerHTML()}
       </div></section>
       <section class="studio-panel" id="studio-panel-2" aria-labelledby="studio-heading-2" hidden><h3 id="studio-heading-2" tabindex="-1">열람과 사용, 두 가지 가격</h3><p class="panel-description">열람권은 자료 확인의 대가예요. 독점 사용권은 별도이며 열람료에서 차감되지 않아요.</p><div class="studio-fields"><div id="studio-price-guidance" aria-live="polite">${priceGuideHTML(priceGuideFor({maturity:"seed",category:"",viewPrice:1000,usePrice:10000}))}</div><div class="price-example"><div><strong>가격은 판매자가 자유롭게 정해요</strong><p>권장 상한을 넘어도 검토 요청을 할 수 있어요.<br>자료를 보완하거나 무료 나눔터에 먼저 공개해도 좋아요.</p></div><button type="button" data-studio="price-preset">권장 상한액 입력</button></div><div class="form-row"><div class="field"><label for="idea-viewPrice">1단계 · 상세 열람료 (원) *</label><input id="idea-viewPrice" name="viewPrice" type="number" min="1000" max="100000000" step="1000" inputmode="numeric" value="1000" required><span class="hint">최소 1,000원 · 1,000원 단위</span></div><div class="field"><label for="idea-usePrice">2단계 · 추가 독점 사용료 (원) *</label><input id="idea-usePrice" name="usePrice" type="number" min="1000" max="100000000" step="1000" inputmode="numeric" value="10000" required><span class="hint">상세 열람료 이상의 가격</span></div></div><div class="studio-financials"><div class="studio-financial"><span>열람권 1건 판매 시 예상액</span><strong id="studio-view-net">—</strong><p id="studio-view-fee"></p></div><div class="studio-financial"><span>사용권 1건 판매 시 예상액</span><strong id="studio-use-net">—</strong><p id="studio-use-fee"></p></div></div><p class="public-boundary">${icon("info")}<span>플랫폼 수수료 차감 후, PG 비용·세금 차감 전의 예상액이에요. 원 미만 수수료는 내림하며 정산은 <span id="studio-hold-days">${config.commerce.holdDays}</span>일 대기해요. 현재 실제 청구와 송금은 0원인 테스트입니다.</span></p></div></section>
-      <section class="studio-panel" id="studio-panel-3" aria-labelledby="studio-heading-3" hidden><h3 id="studio-heading-3" tabindex="-1">공개 전에, 한 번 더 확인</h3><p class="panel-description">왼쪽은 무료로 보이는 소개예요. 공개되었거나 결제 이력이 있는 글은 수정할 수 없으니 마지막으로 확인하세요.</p><div id="studio-review"></div><section class="seller-policy"><h3>판매 수수료와 정산 조건</h3><div class="policy-rates"><span>열람권 <strong>${config.commerce.viewBps/100}%</strong></span><span>독점 사용권 <strong>${config.commerce.useBps/100}%</strong></span><span>정산 대기 <strong>${config.commerce.holdDays}일</strong></span></div><details><summary>판매 정책 전문 확인</summary><p>${h(config.sellerTerms.text)}</p></details><label class="checkbox-label"><input type="checkbox" name="sellerAgreement" required><span>위 수수료와 정산 조건, 운영 검토 후 공개되는 절차에 동의합니다.</span></label></section><label class="checkbox-label ownership-label"><input type="checkbox" name="ownership" required><span>직접 작성했거나 판매 권한이 있는 자료입니다. 무료 공개 범위와 열람권·독점 사용권의 차이를 확인했습니다.</span></label></section>
+      <section class="studio-panel" id="studio-panel-3" aria-labelledby="studio-heading-3" hidden><h3 id="studio-heading-3" tabindex="-1">공개 전에, 한 번 더 확인</h3><p class="panel-description">왼쪽은 무료로 보이는 소개예요. 공개되었거나 결제 이력이 있는 글은 수정할 수 없으니 마지막으로 확인하세요.</p><div id="studio-review"></div><section class="seller-policy"><h3>판매 수수료와 정산 조건</h3><div class="policy-rates"><span>열람권 <strong>${config.commerce.viewBps/100}%</strong></span><span>독점 사용권 <strong>${config.commerce.useBps/100}%</strong></span><span>정산 대기 <strong>${config.commerce.holdDays}일</strong></span></div><details><summary>판매 정책 전문 확인</summary><p>${h(config.sellerTerms.text)}</p></details><label class="checkbox-label"><input type="checkbox" name="sellerAgreement" required><span>위 수수료와 정산 조건, 운영 검토 후 공개되는 절차에 동의합니다.</span></label></section><label class="checkbox-label ownership-label"><input type="checkbox" name="ownership" required><span>직접 작성했거나 판매 권한이 있는 자료입니다. 무료 공개 범위와 열람권·독점 사용권의 차이를 확인했습니다.</span></label>${patentSellerAckHTML()}</section>
       <p class="form-message" id="idea-error" role="alert" hidden></p><div class="form-footer"><span>등록 즉시 공개되지 않아요.<br>검토가 끝나면 내 계정에서 확인해요.</span><div class="studio-footer-actions"><button type="button" class="button button-outline" data-studio="previous" hidden>이전 단계</button><button type="button" class="button button-dark" data-studio="next">다음 단계 ${icon("arrow")}</button><button class="button button-dark" type="submit" hidden>검토 요청하기 ${icon("arrow")}</button></div></div>
     </form></div>`;
 }
@@ -68,7 +70,7 @@ export function createSellerStudio(ctx){
     for(const [name,value] of Object.entries(data))if(name in TEXT_FIELDS&&!["category","topic"].includes(name))form.elements[name].value=value;
     form.querySelectorAll('input[name="domainIds"]').forEach(el=>el.checked=domainIds.includes(el.value));
     updateKindHelp();
-    form.elements.sellerAgreement.checked=false;form.elements.ownership.checked=false;
+    form.elements.sellerAgreement.checked=false;form.elements.ownership.checked=false;form.elements.patentAcknowledged.checked=false;
   }
   function updateKindHelp(){
     const category=form.elements.category.value,data=CATALOG[category];
@@ -116,6 +118,7 @@ export function createSellerStudio(ctx){
       const deliverables=form.elements.deliverables.value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
       if(!deliverables.length||deliverables.length>6||deliverables.some(x=>x.length>80))return {element:form.elements.deliverables,message:"제공 자료를 한 줄에 하나씩, 최대 6개·항목당 80자로 입력해 주세요."};
     }
+    if(index===1){const issue=patentDeclarationIssues(patentFromValues(values(),true))[0];if(issue)return {element:form.elements[issue.field]||form.elements.patentStatus,message:issue.message};}
     if(index===2&&Number(form.elements.usePrice.value)<Number(form.elements.viewPrice.value))return {element:form.elements.usePrice,message:"독점 사용료는 상세 열람료 이상으로 설정해 주세요."};
     return null;
   }
@@ -143,13 +146,13 @@ export function createSellerStudio(ctx){
     $("#domain-selection-count",form).textContent=selectedDomains().length+" / 3개 선택";
     for(const counter of form.querySelectorAll("[data-counter]")){const field=form.elements[counter.dataset.counter],length=field.value.length;counter.textContent=length+" / "+field.maxLength;counter.classList.toggle("is-valid",length>=field.minLength&&length>0);}
     const fields=[...form.querySelectorAll("input[required],select[required],textarea[required]")].filter(el=>!["checkbox","radio"].includes(el.type));
-    const percent=Math.round((fields.filter(validElement).length+(files.private.length?1:0))/(fields.length+1)*100);
+    const percent=Math.round((fields.filter(validElement).length+(files.private.length?1:0)+(patentDeclarationIssues(patentFromValues(values(),true)).length?0:1))/(fields.length+2)*100);
     $("#studio-percent").textContent=percent+"%";$("#studio-progress").value=percent;
     const commerce=editing?.commerce||ctx.getConfig().commerce;
     $("#studio-hold-days",form).textContent=commerce.holdDays;
     for(const [kind,bps] of [["view",commerce.viewBps],["use",commerce.useBps]]){const price=Number(form.elements[kind+"Price"].value),valid=Number.isSafeInteger(price)&&price>=1000&&price<=100000000&&price%1000===0;$("#studio-"+kind+"-net",form).textContent=valid?money(price-Math.floor(price*bps/10000))+"원":"—";$("#studio-"+kind+"-fee",form).textContent=valid?"수수료 "+bps/100+"% · "+money(Math.floor(price*bps/10000))+"원":"1,000원 단위로 입력해 주세요.";}
     $("#studio-price-guidance",form).innerHTML=priceGuideHTML(priceGuideFor(values()));
-    if(step===3)$("#studio-review",form).innerHTML=review()+priceGuideHTML(priceGuideFor(values()));
+    if(step===3)$("#studio-review",form).innerHTML=review()+patentSellerSummaryHTML(patentFromValues(values()))+priceGuideHTML(priceGuideFor(values()));
   }
   function capture(){if(form&&!submitted)memory.set(key(),{owner,values:values(),domainIds:selectedDomains(),files:{cover:[...files.cover],private:[...files.private]},step});}
   function suspend(){capture();clearTimeout(saveTimer);if(autosave&&!submitted)save({quiet:true});for(const url of urls.values())URL.revokeObjectURL(url);urls.clear();form=null;}
@@ -161,7 +164,7 @@ export function createSellerStudio(ctx){
     ctx.show(html,{type:"create",editId:editing?.id||null},"#idea-title");form=$("#idea-form");
     form.dataset.feeQuote=JSON.stringify(config.commerce);form.dataset.sellerTermsVersion=config.sellerTerms.version;
     form.dataset.editId=editing?.id||"";form.dataset.expectedVersion=editing?.version||"";
-    if(editing){const input={...editing.input,tags:editing.input.tags.join(", "),deliverables:editing.input.deliverables.join("\n")};applyValues(input,editing.input.domainIds);files={cover:editing.images.filter(img=>img.kind==="public"),private:editing.images.filter(img=>img.kind==="private")};}
+    if(editing){const input={...editing.input,...patentToValues(editing.input.patent||{}),tags:editing.input.tags.join(", "),deliverables:editing.input.deliverables.join("\n")};applyValues(input,editing.input.domainIds);files={cover:editing.images.filter(img=>img.kind==="public"),private:editing.images.filter(img=>img.kind==="private")};}
     const remembered=memory.get(key());
     if(remembered?.owner===owner){applyValues(remembered.values,remembered.domainIds||[]);files=remembered.files;step=remembered.step;}
     $("#draft-notice").hidden=!saved();

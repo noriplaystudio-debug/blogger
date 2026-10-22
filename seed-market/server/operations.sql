@@ -30,3 +30,6 @@ CREATE TABLE IF NOT EXISTS share_value_opinions(id TEXT PRIMARY KEY,share_id TEX
 CREATE INDEX IF NOT EXISTS share_value_public ON share_value_opinions(share_id,source_hash,question_version,state,moderation);
 CREATE INDEX IF NOT EXISTS share_value_user ON share_value_opinions(user_id,updated_at);
 CREATE INDEX IF NOT EXISTS share_value_period ON share_value_opinions(question_version,updated_at);
+CREATE TABLE IF NOT EXISTS idea_patents(idea_id TEXT PRIMARY KEY REFERENCES ideas(id),listing_version INTEGER NOT NULL, declaration TEXT NOT NULL,review_state TEXT NOT NULL CHECK(review_state IN ('pending','recorded','needs_info','expert_required')),revision INTEGER NOT NULL DEFAULT 0 CHECK(revision>=0),review TEXT,review_token TEXT,reviewer_id TEXT,reviewed_at TEXT,declared_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idea_patents_review ON idea_patents(review_state,declared_at);
+CREATE TABLE IF NOT EXISTS order_patent_disclosures(order_id TEXT PRIMARY KEY REFERENCES orders(id),snapshot TEXT NOT NULL,policy_version TEXT NOT NULL,created_at TEXT NOT NULL);
