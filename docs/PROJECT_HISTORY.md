@@ -63,6 +63,14 @@
 
 ## 변경 기록
 
+### 2026-10-22 — Seed support selector and Korean QA fonts
+- 근거: https://github.com/noriplaystudio-debug/blogger/actions/runs/39738321563; source 4308200cdbc2616ddbc4d7a649130183086a0916. doctor·8/17단계 통과, 거래 확인 수정 검증.
+- 원인: 문의 action이 푸터와 계정 모달에 중복되어 러너가 선택 실패. 실제 캡처에는 한글 글꼴 누락도 확인.
+- 변경: 문의 버튼은 모달 범위로 한정하고 CI에서 한국어 글꼴을 확인/준비. 첫 원격 검사의 실제 결과와 후속 조건을 앱 문서에 기록.
+- 검증: 로컬 소스 검사 통과. 수정 후 실제 UI 결과와 한글 캡처는 새 Actions 실행에서 확인.
+- 배포: QA 브랜치만 갱신. 기존 Blogger·main·운영 배포·중지된 예약 자동화 변경 없음.
+
+
 ### 2026-10-22 — Seed browser runner receipt selection
 - 증상/요구: 사용자가 QA 워크플로를 등록해 실제 판매자·구매자 검증을 요청함.
 - 확인 근거: https://github.com/noriplaystudio-debug/blogger/actions/runs/39735641576; source de09435bb52680ae446815b3c0ccfb4dd776b9d6. doctor 통과, 거래 흐름 7/17 통과, 8단계 strict mode 실패.
