@@ -21,13 +21,13 @@
   },
   "browser": {
     "status": "baseline-failed; runner correction pending browser retest",
-    "passedSteps": 8,
-    "result": "https://github.com/noriplaystudio-debug/blogger/actions/runs/39738321563",
-    "testedCommit": "4308200cdbc2616ddbc4d7a649130183086a0916",
-    "journey": "failed at step 9: ambiguous support selector in test runner",
+    "passedSteps": 11,
+    "result": "https://github.com/noriplaystudio-debug/blogger/actions/runs/39738990201",
+    "testedCommit": "673546b1fc869f13f88d2ebf3abac1167b2e0e3e",
+    "journey": "failed at step 12: closed dialog and toolbar share-mine selector in test runner",
     "configuredSteps": 17,
     "doctor": "passed on GitHub runner",
-    "screenshots": 10,
+    "screenshots": 13,
     "traces": 5,
     "productJavaScriptErrors": 0
   },
@@ -39,6 +39,6 @@
   "livePayments": "not-connected",
   "qaTooling": {
     "status": "passed",
-    "browserCorrection": "receipt fixed in real browser; support dialog selector and Korean fonts pending browser retest"
+    "browserCorrection": "receipt and support selectors passed; Korean font provisioning passed; sharing toolbar selector pending retest"
   }
 }

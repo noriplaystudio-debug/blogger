@@ -63,6 +63,14 @@
 
 ## 변경 기록
 
+### 2026-10-22 — Seed sharing toolbar selection
+- 근거: https://github.com/noriplaystudio-debug/blogger/actions/runs/39738990201; source 673546b1fc869f13f88d2ebf3abac1167b2e0e3e. doctor·한글 글꼴 준비·11/17단계 통과.
+- 원인: 정상적으로 닫힌 모달의 share-mine 버튼이 DOM에 남아 전역 선택자가 목록 버튼과 함께 두 개를 찾음. trace와 실패 HTML로 확인.
+- 변경: 나눔 목록 이동 선택자를 #sharing으로 한정. 실제 캡처에서 한글 표시도 확인. 서비스 로직 변경 없음.
+- 검증: 로컬 정적 검사 통과. 다음 Actions에서 나눔 검토·금액 의견·모바일까지 후속 확인.
+- 배포: QA 브랜치만 갱신, 서비스 배포 없음. 기존 Blogger·main·중지된 예약 자동화 유지.
+
+
 ### 2026-10-22 — Seed support selector and Korean QA fonts
 - 근거: https://github.com/noriplaystudio-debug/blogger/actions/runs/39738321563; source 4308200cdbc2616ddbc4d7a649130183086a0916. doctor·8/17단계 통과, 거래 확인 수정 검증.
 - 원인: 문의 action이 푸터와 계정 모달에 중복되어 러너가 선택 실패. 실제 캡처에는 한글 글꼴 누락도 확인.
