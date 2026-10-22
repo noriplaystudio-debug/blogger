@@ -58,8 +58,14 @@ jobs:
         shell: bash
         run: |
           if [ -z "$(fc-list :lang=ko family)" ]; then
-            sudo apt-get update -qq
-            sudo apt-get install -y --no-install-recommends fonts-noto-cjk
+            SEED_QA_FONT_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/fonts/seed-qa"
+            mkdir -p "$SEED_QA_FONT_DIR"
+            SEED_QA_FONT_BASE="https://raw.githubusercontent.com/notofonts/noto-cjk/523d033d6cb47f4a80c58a35753646f5c3608a78"
+            curl --fail --location --connect-timeout 10 --max-time 45 --retry 1 --retry-max-time 60 --output "$SEED_QA_FONT_DIR/NotoSansKR-Regular.otf" "$SEED_QA_FONT_BASE/Sans/SubsetOTF/KR/NotoSansKR-Regular.otf"
+            test "$(git hash-object "$SEED_QA_FONT_DIR/NotoSansKR-Regular.otf")" = "b8c11425a25c74dac1b51b28341ff1ef379f2ffa"
+            curl --fail --location --connect-timeout 10 --max-time 45 --retry 1 --retry-max-time 60 --output "$SEED_QA_FONT_DIR/OFL.txt" "$SEED_QA_FONT_BASE/LICENSE"
+            test "$(git hash-object "$SEED_QA_FONT_DIR/OFL.txt")" = "d952d62c065f3f35fb83a173496e90b21525aef3"
+            fc-cache -f "$SEED_QA_FONT_DIR"
           fi
           SEED_QA_KOREAN_FONTS="$(fc-list :lang=ko family)"
           test -n "$SEED_QA_KOREAN_FONTS"
@@ -81,5 +87,17 @@ jobs:
         with:
           name: seed-market-qa-${{ github.run_id }}-${{ github.run_attempt }}
           path: seed-market/.sites-runtime/qa-artifacts/
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Keep compact screenshots and result records
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: seed-market-qa-review-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            seed-market/.sites-runtime/qa-artifacts/**/summary.json
+            seed-market/.sites-runtime/qa-artifacts/**/result.json
+            seed-market/.sites-runtime/qa-artifacts/**/*.png
           if-no-files-found: warn
           retention-days: 7

@@ -63,6 +63,14 @@
 
 ## 변경 기록
 
+### 2026-10-22 — Seed QA Korean font download
+- 근거: https://github.com/noriplaystudio-debug/blogger/actions/runs/39747369688 (aa7e640931dd1127108950f022d100dec2514edd). 한글 글꼴 다운로드 3분 시간 초과로 앱/브라우저 검사는 실행 전 중단.
+- 원인: Ubuntu 미러에서 61.2MB fonts-noto-cjk 다운로드가 완료되지 않음. 기능 오류/성공으로 판정하지 않음.
+- 변경: QA 워크플로에서 공식 Noto CJK 고정 커밋의 4.6MB 한국어 폰트와 라이선스를 제한 시간 내 받고 Git blob SHA를 대조. 글꼴 존재 검사 유지. 전체 증거 외에 작은 스크린샷/결과 아티팩트도 보존.
+- 검증: YAML/포함 shell 구문, 정적 62모듈, QA 도구 검사 통과. 후속 실제 검사로 확인.
+- 배포: QA 브랜치만 반영, 앱 기능 소스·서비스/DB·Blogger 운영·main·예약 중단 상태 변경 없음.
+
+
 ### 2026-10-22 — Seed v5.3 patent rights review workflow
 - 요구: 판매 등록에서 특허권 관련 검토가 가능하도록 시스템 반영.
 - 근거/원인: 기존 Seed 소스에는 일반 창작·품질 심사만 있고 특허 현황·거래 권한·등록 가능성·침해 검토의 구분과 주문 당시 특허 안내 기록이 없었음.
