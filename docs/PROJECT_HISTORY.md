@@ -63,6 +63,14 @@
 
 ## 변경 기록
 
+### 2026-10-22 — Seed mobile filter journey
+- 근거: https://github.com/noriplaystudio-debug/blogger/actions/runs/39739631872; source 757e852e790334b7a83855d71661d5b96ffd3405. doctor·16/17단계 통과, 나눔/의견/운영 통계까지 실제 UI 확인.
+- 원인: 마지막 모바일 검사에서 닫힌 상세 필터의 선택 항목을 바로 조작하려 해 대기 종료. 접힌 필터는 정상 UI임.
+- 변경: 실제 summary 클릭으로 필터를 열고 종류 선택·서버 응답·카드 로딩 뒤 다음 동작. 강제 클릭·검사 생략 없음.
+- 검증: 정적 검사 통과. 새 Actions에서 전체 17단계 결과 확인.
+- 배포: QA 브랜치 도구 보완만 수행. 서비스 배포·기존 Blogger·main·예약 중단 상태 변경 없음.
+
+
 ### 2026-10-22 — Seed sharing toolbar selection
 - 근거: https://github.com/noriplaystudio-debug/blogger/actions/runs/39738990201; source 673546b1fc869f13f88d2ebf3abac1167b2e0e3e. doctor·한글 글꼴 준비·11/17단계 통과.
 - 원인: 정상적으로 닫힌 모달의 share-mine 버튼이 DOM에 남아 전역 선택자가 목록 버튼과 함께 두 개를 찾음. trace와 실패 HTML로 확인.

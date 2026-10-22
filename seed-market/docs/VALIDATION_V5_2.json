@@ -21,14 +21,14 @@
   },
   "browser": {
     "status": "baseline-failed; runner correction pending browser retest",
-    "passedSteps": 11,
-    "result": "https://github.com/noriplaystudio-debug/blogger/actions/runs/39738990201",
-    "testedCommit": "673546b1fc869f13f88d2ebf3abac1167b2e0e3e",
-    "journey": "failed at step 12: closed dialog and toolbar share-mine selector in test runner",
+    "passedSteps": 16,
+    "result": "https://github.com/noriplaystudio-debug/blogger/actions/runs/39739631872",
+    "testedCommit": "757e852e790334b7a83855d71661d5b96ffd3405",
+    "journey": "failed at step 17: runner attempted to select a collapsed mobile filter",
     "configuredSteps": 17,
     "doctor": "passed on GitHub runner",
-    "screenshots": 13,
-    "traces": 5,
+    "screenshots": 17,
+    "traces": 7,
     "productJavaScriptErrors": 0
   },
   "deployment": {
@@ -39,6 +39,6 @@
   "livePayments": "not-connected",
   "qaTooling": {
     "status": "passed",
-    "browserCorrection": "receipt and support selectors passed; Korean font provisioning passed; sharing toolbar selector pending retest"
+    "browserCorrection": "receipt, support and sharing selectors passed; Korean rendering confirmed; mobile filter interaction pending retest"
   }
 }
