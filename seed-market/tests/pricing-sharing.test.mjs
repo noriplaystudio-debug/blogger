@@ -1,0 +1,122 @@
+import assert from "node:assert/strict";
+import {createLocalDB} from "../server/sqlite.mjs";
+import {handleAPI} from "../server/api.mjs";
+import {SELLER_TERMS_VERSION,TERMS_VERSION} from "../server/policy.mjs";
+import {CATALOG} from "../public/assets/catalog.js";
+import {PRICE_LEVELS,PRICE_GUIDE_VERSION,priceGuideFor,priceGuideHTML,priceHintHTML} from "../public/assets/pricing.js";
+import {SHARE_LICENSES,SHARE_TERMS_VERSION} from "../public/assets/sharing-policy.js";
+import {shareCardsHTML,shareFormHTML} from "../public/assets/sharing.js";
+import {escapeHtml as h} from "../public/assets/format.js";
+
+for(const [maturity,level] of Object.entries(PRICE_LEVELS)){
+  const data={maturity,category:"music",viewPrice:level.view+1000,usePrice:level.use+1000},before=structuredClone(data),guide=priceGuideFor(data);
+  assert.equal(guide.view.above,true);assert.equal(guide.use.above,true);assert.equal(guide.view.difference,1000);assert.equal(guide.mode,"advisory");assert.deepEqual(data,before);
+  assert.equal(priceGuideFor({...data,viewPrice:level.view}).view.above,false);
+  assert.equal(priceGuideFor({...data,viewPrice:1000}).view.above,false);
+  assert.match(guide.useBasis,/10배/);assert.match(guide.note,/판매자가 선택/);
+  assert.ok(priceGuideHTML(guide).includes("넘어도 등록·구매"));assert.ok(!priceGuideHTML(guide).includes('required'));
+}
+assert.equal(priceGuideFor({maturity:"toString",viewPrice:""}).maturity,"seed");
+assert.equal(priceGuideFor({viewPrice:"invalid"}).view.sellerPrice,null);
+for(const category of Object.keys(CATALOG))assert.ok(priceGuideFor({category}).example.length>10);
+console.log("PASS advisory references, inclusive boundaries, transparent basis and no seller-price mutation");
+
+const db=createLocalDB(),objects=new Map();
+const env={DB:db,PAYMENTS_MODE:"test",ADMIN_USER_IDS:"operator",BUCKET:{async put(key,value){objects.set(key,value);},async get(key){return {body:objects.get(key)};},async delete(key){objects.delete(key);}}};
+async function call(path,{user=null,method="GET",body,key,headers={}}={}){
+  const request=new Request("https://seed.test"+path,{method,headers:{...(body!==undefined?{"Content-Type":"application/json"}:{}),...(key?{"Idempotency-Key":key}:{}),...headers},...(body!==undefined?{body:JSON.stringify(body)}:{})});
+  const response=await handleAPI(request,env,{identity:user?{id:user}:null});
+  return {status:response.status,data:response.headers.get("Content-Type")?.includes("json")?await response.json():null};
+}
+const post=(path,user,body,key)=>call(path,{user,method:"POST",body,key});
+const good=async(result,status=200)=>{const r=await result;assert.equal(r.status,status,JSON.stringify(r.data));return r.data;};
+for(const [user,role] of [["seller","seller"],["other-seller","seller"],["buyer","buyer"],["other-buyer","buyer"]])await good(post("/api/signup",user,{role,name:user}),201);
+const config=await good(call("/api/config"));assert.equal(config.priceGuidance.mode,"advisory");
+const png=Uint8Array.from(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=","base64"));
+const response=await handleAPI(new Request("https://seed.test/api/uploads?kind=private",{method:"POST",headers:{"Content-Type":"image/png"},body:png}),env,{identity:{id:"seller"}});assert.equal(response.status,201);const image=await response.json();
+const listing={title:"가격 자유 설정을 확인하는 아이디어",summary:"권장 가격보다 높은 판매가를 자유롭게 등록하고 그 기준을 구매 전에 확인할 수 있는 테스트 기획입니다.",category:"product",topic:"product-home",maturity:"seed",viewPrice:500000,usePrice:1500000,tags:[],problem:"가정에서 자주 사용하는 물건의 보관 공간을 줄이고 이용 동선을 편하게 구성하기 위한 기획입니다. ".repeat(2),solution:"SECRET-PAID-SOLUTION "+"구조를 접을 수 있도록 설계하고 사용 흐름을 단계별로 설명해 제품 제작을 준비하는 가상의 기획입니다. ".repeat(3),audience:"작은 공간에서 수납을 효율적으로 정리하고 싶은 성인 사용자입니다.",execution:"모형 제작과 실제 사용자 체험을 준비하고 필요한 자원과 비용을 조사한 뒤 기록을 바탕으로 설계를 보완합니다. ".repeat(3),deliverables:["제품 구조 기획서"],imageIds:[image.id],originality:"직접 만든 기획과 자체 제작한 참고 이미지만 사용하는 테스트입니다.",validationNote:"실제 사용자 조사는 아직 진행하지 않았으며 조사 방법을 준비한 단계입니다.",risks:"제작 비용과 안전성을 별도로 확인해야 하는 초기 단계입니다.",sellerAgreement:true,sellerTermsVersion:SELLER_TERMS_VERSION,feeQuote:config.commerce,priceGuide:{recommendedMax:100000000,mode:"enforced"}};
+const created=await good(post("/api/ideas","seller",listing,"above-guide-listing"),201),ideaId=created.id;
+await good(post("/api/admin/ideas/"+ideaId+"/review","operator",{status:"approved",expectedStatus:"pending",expectedVersion:1,reason:"가격은 판매자가 선택하며 공개 자료와 제공 범위를 확인한 테스트입니다."}));
+const publicIdea=(await good(call("/api/ideas/"+ideaId))).idea;
+assert.equal(publicIdea.viewPrice,500000);assert.equal(publicIdea.usePrice,1500000);
+assert.equal(publicIdea.priceGuide.view.recommendedMax,3000);assert.equal(publicIdea.priceGuide.use.recommendedMax,30000);
+assert.equal(publicIdea.priceGuide.view.above,true);assert.equal(publicIdea.priceGuide.version,PRICE_GUIDE_VERSION);
+assert.ok(!JSON.stringify(publicIdea).includes("SECRET-PAID-SOLUTION"));assert.equal((await call("/api/ideas/"+ideaId+"/details",{user:"buyer"})).status,403);
+const buy=(kind,key)=>post("/api/ideas/"+ideaId+"/checkout","buyer",{kind,agree:true,termsVersion:TERMS_VERSION,priceGuide:{view:{recommendedMax:500000}}},key);
+const order=(await good(buy("view","above-guide-view"),201)).order;
+assert.equal(order.amount,500000);
+const receipt=await good(call("/api/orders/"+order.id,{user:"buyer"}));
+assert.equal(receipt.priceGuide.view.recommendedMax,3000);assert.equal(receipt.financials.gross,500000);assert.equal(receipt.financials.platform_fee,50000);
+assert.equal(receipt.priceGuide.basis,"seller-declared-maturity");assert.equal(receipt.priceGuide.mode,"advisory");
+assert.equal((await good(buy("view","above-guide-view"))).order.id,order.id);
+assert.equal((await db.prepare("SELECT count(*) AS n FROM order_price_guidance WHERE order_id=?").bind(order.id).first()).n,1);
+assert.equal((await call("/api/orders/"+order.id,{user:"other-buyer"})).status,404);
+await db.prepare("UPDATE ideas SET maturity='professional' WHERE id=?").bind(ideaId).run();
+assert.equal((await good(call("/api/ideas/"+ideaId))).idea.priceGuide.view.recommendedMax,30000);
+assert.equal((await good(call("/api/orders/"+order.id,{user:"buyer"}))).priceGuide.view.recommendedMax,3000);
+const use=(await good(buy("use","above-guide-use"),201)).order;assert.equal(use.amount,1500000);
+console.log("PASS above-reference listing/view/use purchase, server-authored public guidance, original prices/fees and immutable receipt reference");
+
+const draft={title:"무료로 나누는 주방 정리 아이디어",summary:"생활 속에서 찾은 작은 불편을 줄이고 다른 사람들과 함께 발전시켜 보고 싶은 무료 나눔 아이디어입니다.",body:"모든 이용자가 무료로 읽을 수 있도록 공개하는 주방 정리 방법입니다. 준비물과 실행 순서를 설명하고 더 발전시키고 싶은 지점을 함께 제안합니다. ".repeat(3),category:"product",topic:"product-home",license:"discussion",agree:true,termsVersion:SHARE_TERMS_VERSION};
+assert.equal((await post("/api/shares",null,draft,"no-login-share")).status,401);
+assert.equal((await post("/api/shares","new-user",draft,"no-signup-share")).status,403);
+assert.equal((await post("/api/shares","seller",{...draft,license:"unknown"},"bad-license-share")).status,400);
+assert.equal((await post("/api/shares","seller",{...draft,agree:false},"bad-consent-share")).status,400);
+assert.equal((await post("/api/shares","seller",{...draft,termsVersion:"old"},"old-consent-share")).status,400);
+assert.equal((await post("/api/shares","seller",{...draft,topic:"music-composition"},"bad-topic-share")).status,400);
+assert.equal((await call("/api/shares",{user:"seller",method:"POST",key:"cross-site-share",body:draft,headers:{Origin:"https://elsewhere.invalid"}})).status,403);
+const duplicate=await Promise.all([post("/api/shares","seller",draft,"same-share-request"),post("/api/shares","seller",draft,"same-share-request")]);
+assert.deepEqual(duplicate.map(r=>r.status).sort(),[200,201]);const shareId=duplicate[0].data.id;assert.equal(shareId,duplicate[1].data.id);
+assert.equal((await post("/api/shares","seller",{...draft,title:"다른 내용으로 변경하는 나눔 제목"},"same-share-request")).status,409);
+assert.equal((await good(call("/api/shares/requests/same-share-request",{user:"seller"}))).id,shareId);
+assert.equal((await call("/api/shares/requests/same-share-request",{user:"other-seller"})).status,404);
+assert.equal((await good(call("/api/shares"))).total,0);
+assert.equal((await call("/api/shares/"+shareId)).status,404);
+assert.equal((await good(call("/api/shares/mine",{user:"seller"}))).shares[0].body,draft.body.trim());
+assert.equal((await good(call("/api/shares/mine",{user:"other-seller"}))).shares.length,0);
+assert.equal((await call("/api/admin/shares")).status,401);assert.equal((await call("/api/admin/shares",{user:"buyer"})).status,403);
+const decide=(id,status,expectedStatus="pending",expectedVersion=1,user="operator")=>post("/api/admin/shares/"+id+"/review",user,{status,expectedStatus,expectedVersion,reason:"전체 무료 공개와 이용 허락 조건을 검토한 운영 테스트입니다."});
+assert.equal((await decide(shareId,"published","pending",1,"buyer")).status,403);
+assert.equal((await post("/api/shares/"+shareId+"/revise","other-seller",{...draft,expectedVersion:1})).status,404);
+await good(decide(shareId,"rejected"));
+assert.equal((await decide(shareId,"published")).status,409);
+await good(post("/api/shares/"+shareId+"/revise","seller",{...draft,title:"보완하여 무료로 나누는 주방 정리 아이디어",expectedVersion:2}));
+assert.equal((await decide(shareId,"published","pending",2)).status,409);
+await good(decide(shareId,"published","pending",3));
+const priorOrders=(await db.prepare("SELECT count(*) AS n FROM orders").first()).n;
+const free=await good(call("/api/shares/"+shareId));assert.equal(free.share.body,draft.body.trim());assert.equal(free.share.licenseText,SHARE_LICENSES.discussion.text);
+assert.equal(Object.hasOwn(free.share,"reviewReason"),false);assert.equal(Object.hasOwn(free.share,"author_id"),false);
+assert.equal((await db.prepare("SELECT count(*) AS n FROM orders").first()).n,priorOrders);
+assert.equal((await post("/api/shares/"+shareId+"/revise","seller",{...draft,expectedVersion:4})).status,409);
+assert.equal((await post("/api/ideas/"+shareId+"/checkout","buyer",{kind:"view",agree:true,termsVersion:TERMS_VERSION},"free-no-payment")).status,404);
+console.log("PASS free publication moderation, role/owner isolation, consent/category validation, idempotency and stale-review rejection");
+
+const buyerShare=(await good(post("/api/shares","buyer",{...draft,license:"attribution",summary:draft.summary+" 100%_ 활용 예시"},"buyer-can-share"),201)).id;
+await good(decide(buyerShare,"published"));
+assert.equal((await good(call("/api/shares?q="+encodeURIComponent("100%_")))).total,1);
+assert.equal((await good(call("/api/shares?category=music"))).total,0);
+assert.equal((await call("/api/shares?page=-1")).status,400);assert.equal((await call("/api/shares?category=toString")).status,400);
+const permitted=await good(call("/api/shares/"+buyerShare));assert.equal(permitted.share.licenseText,SHARE_LICENSES.attribution.text);
+assert.equal((await post("/api/shares/"+buyerShare+"/hide","seller",{expectedVersion:2})).status,404);
+await good(post("/api/shares/"+buyerShare+"/hide","buyer",{expectedVersion:2}));
+assert.equal((await call("/api/shares/"+buyerShare)).status,404);
+const hidden=(await good(call("/api/shares/"+buyerShare,{user:"buyer"}))).share;
+assert.equal(hidden.status,"hidden");assert.equal(hidden.licenseText,permitted.share.licenseText);
+assert.equal((await decide(buyerShare,"published","published",2)).status,409);
+assert.equal((await decide(buyerShare,"published","hidden",3)).status,409);
+for(let i=0;i<12;i++){const item=await good(post("/api/shares","buyer",{...draft,title:"검색과 페이지 이동을 확인하는 무료 아이디어 "+i},"pagination-share-"+i),201);await good(decide(item.id,"published"));}
+const first=await good(call("/api/shares")),second=await good(call("/api/shares?page=2"));
+assert.equal(first.total,13);assert.equal(first.shares.length,12);assert.equal(second.shares.length,1);
+assert.ok(first.shares.every(item=>!second.shares.some(other=>other.id===item.id)));
+assert.equal((await good(call("/api/shares?page=999"))).page,2);
+const quota=await Promise.all(Array.from({length:12},(_,i)=>post("/api/shares","other-buyer",draft,"quota-share-"+i)));
+assert.equal(quota.filter(r=>r.status===201).length,10);assert.equal(quota.filter(r=>r.status===429).length,2);
+console.log("PASS buyer participation, literal search, pagination, pending quota and withdrawal without silently changing granted permissions");
+
+const attack='<img src=x onerror="window.PWNED=1">',button=(action,label,id="",cls="button")=>'<button type="button" class="'+h(cls)+'" data-action="'+h(action)+'" data-id="'+h(id)+'">'+h(label)+'</button>';
+const card=shareCardsHTML([{...free.share,title:attack,summary:attack,author:attack,reviewReason:attack,status:"pending"}],{button,mode:"admin"});
+const form=shareFormHTML({header:()=>'<h2 id="dialog-title">작성</h2>',button,draft:{title:attack,summary:attack,body:attack}});
+for(const html of [card,form]){assert.ok(!html.includes(attack));assert.ok(html.includes(h(attack)));const ids=[...html.matchAll(/\sid="([^"]+)"/g)].map(m=>m[1]);assert.equal(new Set(ids).size,ids.length);}
+assert.match(priceHintHTML(publicIdea),/권장액 초과/);
+assert.equal((await db.prepare("SELECT count(*) AS n FROM audit_events WHERE action LIKE 'share.%'").first()).n>15,true);
+db.close();console.log("PASS escaped sharing templates and auditable publication changes");

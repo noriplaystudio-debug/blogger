@@ -1,0 +1,20 @@
+# syntax=docker/dockerfile:1
+ARG PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.62.1-noble
+FROM ${PLAYWRIGHT_IMAGE}
+ARG PLAYWRIGHT_IMAGE
+WORKDIR /app
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+    SEED_QA_BROWSER_IMAGE=${PLAYWRIGHT_IMAGE} \
+    SEED_QA_ARTIFACTS_DIR=/qa-output
+COPY tools/browser-qa/package.json tools/browser-qa/package.json
+# The official image already contains Chromium and system libraries.
+# Only the matching JS driver is installed. Keep inherited proxy/TLS settings.
+RUN --mount=type=secret,id=proxy_ca \
+    if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
+    npm install --prefix tools/browser-qa --ignore-scripts --no-audit --no-fund --fetch-timeout=30000 --fetch-retries=0
+COPY . .
+# Fail at build time if Node, driver version or preinstalled Chromium mismatches.
+RUN node --input-type=module -e "import {loadQABrowser} from './scripts/browser-qa-runtime.mjs'; await loadQABrowser();"
+RUN mkdir -p /app/.sites-runtime /qa-output && chmod 1777 /app/.sites-runtime /qa-output
+CMD ["node","scripts/browser-qa-container.mjs"]

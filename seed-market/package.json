@@ -1,0 +1,48 @@
+{
+  "name": "seed-idea-market",
+  "version": "5.2.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "check": "node scripts/check.mjs",
+    "test": "node tests/api.test.mjs && node tests/operations.test.mjs && node tests/discovery.test.mjs && node tests/taxonomy.test.mjs && node tests/ui.test.mjs && node tests/journeys.test.mjs && node tests/pricing-sharing.test.mjs && node tests/valuations.test.mjs",
+    "dev": "node --import ./scripts/sites-env.mjs scripts/run-framework.mjs dev",
+    "dev:standalone": "node scripts/dev-server.mjs",
+    "build": "node --import ./scripts/sites-env.mjs scripts/run-framework.mjs build",
+    "db:generate": "drizzle-kit generate",
+    "auth:setup": "node scripts/setup-auth.mjs",
+    "auth:migrate": "node scripts/migrate-auth.mjs",
+    "test:browser": "node tests/browser.test.mjs",
+    "qa:prepare": "node scripts/browser-qa-prepare.mjs",
+    "qa:doctor": "node scripts/browser-qa-doctor.mjs",
+    "qa:tools-test": "node tests/qa-tools.test.mjs",
+    "qa:ci": "node scripts/browser-qa-ci.mjs"
+  },
+  "dependencies": {
+    "drizzle-orm": "0.45.2",
+    "next": "16.3.4",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "better-auth": "1.7.11"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "1.37.1",
+    "@cloudflare/workers-types": "4.20260515.1",
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "drizzle-kit": "0.31.10",
+    "typescript": "5.9.3",
+    "vinext": "1.0.0-beta.5",
+    "vite": "8.0.13",
+    "wrangler": "4.92.0"
+  },
+  "overrides": {
+    "miniflare": {
+      "sharp": "0.35.4"
+    }
+  }
+}

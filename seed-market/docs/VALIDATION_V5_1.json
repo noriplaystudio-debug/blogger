@@ -1,0 +1,30 @@
+{
+  "version": "5.1.0",
+  "checkedAt": "2026-10-21T22:16:31.570707+00:00",
+  "staticCheck": {
+    "status": "passed",
+    "modules": 52
+  },
+  "testSuites": {
+    "status": "passed",
+    "count": 7,
+    "scope": "actual SQLite + Web Request and UI templates; no browser"
+  },
+  "preview": {
+    "status": "generated",
+    "inlineJavaScript": "syntax passed",
+    "htmlStructure": "passed"
+  },
+  "browser": {
+    "status": "blocked",
+    "passedSteps": 0,
+    "result": "/workspace/sites/seed-market/.sites-runtime/browser-qa/doctor-1792620831355-d03b640b/result.json",
+    "journey": "not-run",
+    "configuredSteps": 14
+  },
+  "deployment": {
+    "status": "not-deployed",
+    "reason": "Site identity resolves to a different calculator project, no deployed version; supported publishing helper unavailable."
+  },
+  "livePayments": "not-connected"
+}

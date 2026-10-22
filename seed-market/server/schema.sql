@@ -1,0 +1,13 @@
+PRAGMA foreign_keys=ON;
+CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, role TEXT NOT NULL CHECK(role IN ('seller','buyer')), name TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS ideas(id TEXT PRIMARY KEY, seller_id TEXT NOT NULL REFERENCES users(id), title TEXT NOT NULL, summary TEXT NOT NULL, category TEXT NOT NULL, maturity TEXT NOT NULL, view_price INTEGER NOT NULL CHECK(view_price>=1000), use_price INTEGER NOT NULL CHECK(use_price>=view_price), tags TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','sold')), exclusive_buyer_id TEXT REFERENCES users(id), license_order_id TEXT, is_sample INTEGER NOT NULL DEFAULT 0, art TEXT NOT NULL DEFAULT 'notes', created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS ideas_category_status ON ideas(category,status);
+CREATE TABLE IF NOT EXISTS idea_details(idea_id TEXT PRIMARY KEY REFERENCES ideas(id), problem TEXT NOT NULL, solution TEXT NOT NULL, audience TEXT NOT NULL, execution TEXT NOT NULL, deliverables TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS uploads(id TEXT PRIMARY KEY, owner_id TEXT NOT NULL REFERENCES users(id), idea_id TEXT REFERENCES ideas(id), kind TEXT NOT NULL CHECK(kind IN ('public','private')), object_key TEXT NOT NULL UNIQUE, content_type TEXT NOT NULL, size INTEGER NOT NULL, created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS uploads_idea ON uploads(idea_id,kind);
+CREATE TABLE IF NOT EXISTS orders(id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), idea_id TEXT NOT NULL REFERENCES ideas(id), kind TEXT NOT NULL CHECK(kind IN ('view','use')), amount INTEGER NOT NULL, mode TEXT NOT NULL CHECK(mode='test'), status TEXT NOT NULL CHECK(status='paid'), created_at TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS orders_user ON orders(user_id,created_at);
+CREATE TABLE IF NOT EXISTS view_grants(idea_id TEXT NOT NULL REFERENCES ideas(id), user_id TEXT NOT NULL REFERENCES users(id), order_id TEXT NOT NULL UNIQUE REFERENCES orders(id), created_at TEXT NOT NULL, PRIMARY KEY(idea_id,user_id));
+CREATE TABLE IF NOT EXISTS licenses(idea_id TEXT PRIMARY KEY REFERENCES ideas(id), user_id TEXT NOT NULL REFERENCES users(id), order_id TEXT NOT NULL UNIQUE REFERENCES orders(id), created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS pledges(order_id TEXT PRIMARY KEY REFERENCES orders(id), user_id TEXT NOT NULL REFERENCES users(id), idea_id TEXT NOT NULL REFERENCES ideas(id), kind TEXT NOT NULL, version TEXT NOT NULL, text TEXT NOT NULL, agreed_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS bookmarks(user_id TEXT NOT NULL REFERENCES users(id), idea_id TEXT NOT NULL REFERENCES ideas(id), PRIMARY KEY(user_id,idea_id));

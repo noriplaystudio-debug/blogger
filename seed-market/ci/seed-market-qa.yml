@@ -1,0 +1,71 @@
+name: Seed market browser QA
+
+on:
+  push:
+    branches: ["codex/seed-market-qa"]
+    paths:
+      - "seed-market/**"
+      - "!seed-market/docs/**"
+      - "!seed-market/README.md"
+      - ".github/workflows/seed-market-qa.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: seed-market-qa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    defaults:
+      run:
+        working-directory: seed-market
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+      SEED_QA_ARTIFACTS_DIR: .sites-runtime/qa-artifacts
+      SEED_QA_BROWSER_IMAGE: github-hosted/ubuntu-24.04-preinstalled-chrome
+    steps:
+      - name: Checkout the QA commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.21.0"
+
+      - name: Use Chrome already installed on the hosted runner
+        shell: bash
+        run: |
+          SEED_QA_CHROME_BIN="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium)"
+          test -x "$SEED_QA_CHROME_BIN"
+          printf 'SEED_BROWSER_EXECUTABLE=%s\n' "$SEED_QA_CHROME_BIN" >> "$GITHUB_ENV"
+          "$SEED_QA_CHROME_BIN" --version
+
+      - name: Install only the pinned Playwright driver
+        timeout-minutes: 2
+        run: npm install --prefix tools/browser-qa --ignore-scripts --no-audit --no-fund --fetch-timeout=30000 --fetch-retries=1
+
+      - name: Static, API, database and QA tooling checks
+        run: |
+          npm run check
+          npm test
+          npm run qa:tools-test
+
+      - name: Verify the browser and complete real UI journeys
+        timeout-minutes: 7
+        run: npm run qa:ci
+
+      - name: Keep only generated QA evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: seed-market-qa-${{ github.run_id }}-${{ github.run_attempt }}
+          path: seed-market/.sites-runtime/qa-artifacts/
+          if-no-files-found: warn
+          retention-days: 7

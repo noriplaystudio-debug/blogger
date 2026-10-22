@@ -1,0 +1,9 @@
+node_modules/
+.sites-runtime/
+.wrangler/
+.env*
+!.env.example
+test-results/
+playwright-report/
+*.tar.gz
+dist/
