@@ -1,5 +1,13 @@
 # v5.2 검증 기록
 
+## 최종 확인 · 2026-10-22 · 실제 브라우저 17/17 통과
+
+[https://github.com/noriplaystudio-debug/blogger/actions/runs/39740383010](https://github.com/noriplaystudio-debug/blogger/actions/runs/39740383010)에서 doctor와 전체 17단계가 모두 통과했다. 검사한 소스는 `e6d9b15c67359f27dd814d3b2661992ef9145042`이며 Node 24.21.0, Chrome 155.0.8059.84, Playwright 1.62.1을 사용했다. 한국어 글꼴을 준비해 실제 캡처의 한글 표시도 확인했다. 스크린샷 17개와 trace 7개를 내려받아 결과 JSON·ZIP 무결성·아티팩트 체크섬을 확인했다.
+
+테스트 결제 모드의 판매자·구매자 A/B·운영자, 무료 나눔·금액 의견·운영 통계, 390×844 모바일 에뮬레이션을 검증했다. 실제 OAuth·실제 결제/송금·실물 휴대폰·360px 추가 검사·서비스 배포는 이 통과 범위에 포함하지 않는다. Work/Codex 자체 실행 제한은 남아 있지만 GitHub에서 실제 브라우저 검증을 수행할 경로가 확보됐다.
+
+아래의 통과 전 기록은 당시 상태이며 이 후속 결과와 구분한다.
+
 검증일: 2026-10-21 UTC / 2026-10-22 KST
 
 - `npm run check`: 57개 JavaScript 모듈·상대 경로·HTML 자산·ID·호스팅 바인딩 통과.

@@ -1,6 +1,6 @@
 {
   "version": "5.2.0",
-  "checkedAt": "2026-10-22T06:53:01.904092+00:00",
+  "checkedAt": "2026-10-22T07:31:35.779523+00:00",
   "staticCheck": {
     "status": "passed",
     "modules": 57
@@ -20,16 +20,29 @@
     "data": "explicitly fictional design samples"
   },
   "browser": {
-    "status": "baseline-failed; runner correction pending browser retest",
-    "passedSteps": 16,
-    "result": "https://github.com/noriplaystudio-debug/blogger/actions/runs/39739631872",
-    "testedCommit": "757e852e790334b7a83855d71661d5b96ffd3405",
-    "journey": "failed at step 17: runner attempted to select a collapsed mobile filter",
+    "status": "passed",
+    "passedSteps": 17,
+    "result": "https://github.com/noriplaystudio-debug/blogger/actions/runs/39740383010",
+    "testedCommit": "e6d9b15c67359f27dd814d3b2661992ef9145042",
+    "journey": "passed: all 17 steps",
     "configuredSteps": 17,
     "doctor": "passed on GitHub runner",
     "screenshots": 17,
     "traces": 7,
-    "productJavaScriptErrors": 0
+    "productJavaScriptErrors": 0,
+    "viewports": [
+      {
+        "width": 1365,
+        "height": 900,
+        "kind": "desktop"
+      },
+      {
+        "width": 390,
+        "height": 844,
+        "kind": "mobile emulation"
+      }
+    ],
+    "environmentIssue": "QA-ENV-001 resolved on GitHub; Work/Codex environment restrictions remain"
   },
   "deployment": {
     "status": "not-deployed",
@@ -39,6 +52,6 @@
   "livePayments": "not-connected",
   "qaTooling": {
     "status": "passed",
-    "browserCorrection": "receipt, support and sharing selectors passed; Korean rendering confirmed; mobile filter interaction pending retest"
+    "browserCorrection": "verified: receipt/support/sharing selectors, mobile filter interaction and Korean screenshots"
   }
 }

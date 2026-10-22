@@ -63,6 +63,15 @@
 
 ## 변경 기록
 
+### 2026-10-22 — Seed real browser QA 17/17 passed
+- 근거: https://github.com/noriplaystudio-debug/blogger/actions/runs/39740383010; tested source e6d9b15c67359f27dd814d3b2661992ef9145042.
+- 확인: GitHub doctor와 전체 17단계 모두 성공. 정적 57모듈·서버/API/DB/템플릿 8묶음·QA 도구 검사 성공. 실제 스크린샷 17개·trace 7개, pageErrors 0. 아티팩트 12408349474 ZIP 체크섬 및 무결성 확인.
+- 수정 결과: 거래/문의/나눔 버튼 선택 범위, 모바일 필터 열기 순서와 한글 캡처 환경 보완을 실제 재실행으로 검증. 서비스 거래·가격·권한 로직 변경 없음.
+- 변경: seed-market 검증/운영 문서·README와 이 이력만 갱신. 검사한 소스 커밋과 증거를 보존하며 이번 후속 커밋은 문서만 변경.
+- 한계: 390x844 모바일 에뮬레이션. 실물 휴대폰·실제 OAuth·PG·송금·법적 권리 이전은 별도이며 미검증.
+- 배포: 서비스 미배포. QA 브랜치만 갱신, Blogger 운영·main·중지된 예약 자동화 변경 없음. QA-ENV-001은 GitHub에서 해결됐으며 Work/Codex 자체 제한은 별도.
+
+
 ### 2026-10-22 — Seed mobile filter journey
 - 근거: https://github.com/noriplaystudio-debug/blogger/actions/runs/39739631872; source 757e852e790334b7a83855d71661d5b96ffd3405. doctor·16/17단계 통과, 나눔/의견/운영 통계까지 실제 UI 확인.
 - 원인: 마지막 모바일 검사에서 닫힌 상세 필터의 선택 항목을 바로 조작하려 해 대기 종료. 접힌 필터는 정상 UI임.
