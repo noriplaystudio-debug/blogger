@@ -1,5 +1,11 @@
 # GitHub Actions에서 실제 화면 검사 · v5.2.0
 
+## 최신 상태 · 2026-10-22
+
+사용자가 전용 워크플로를 업로드했고 [실행 39735641576](https://github.com/noriplaystudio-debug/blogger/actions/runs/39735641576)에서 소스 등록과 실제 브라우저 doctor가 통과했다. 전체 17단계 중 7단계 통과 후 러너의 거래 기록 선택자 중복으로 중단됐다. 해당 선택자를 보완했으며 [검사 증거와 재검증 조건](QA_ACTIONS_2026_10_22.md)에 기록했다.
+
+소스 등록 이후에는 일반 워크플로 `ci/seed-market-qa.yml`을 저장소 루트 `.github/workflows/seed-market-qa.yml`로 사용한다. 수정 소스를 이전 embedded snapshot으로 덮어쓰지 않고, QA 브랜치에 push된 정확한 커밋을 검사한다. 아래 파일 쓰기 차단 설명은 최초 등록 전의 이력이다.
+
 대상: 사용자가 지정한 `noriplaystudio-debug/blogger` 저장소의 `codex/seed-market-qa` 브랜치. 앱은 `seed-market/`, 전용 워크플로는 루트 `.github/workflows/seed-market-qa.yml`에 둡니다. Blogger의 기존 앱·운영 설정과 main 브랜치는 수정하지 않습니다.
 
 GitHub가 제공하는 `ubuntu-24.04` 실행 환경에는 Chrome/Chromium이 사전 설치되어 있습니다. 워크플로는 실제 실행 파일을 확인해 명시적으로 선택하고 고정 Playwright 1.62.1 드라이버만 설치합니다. Docker, Chromium ZIP 설치, 별도 테스트 사이트 배포, 운영 인증키는 필요하지 않습니다. Node.js는 실행 이미지에서 제공되는 24.21.0을 지정합니다.

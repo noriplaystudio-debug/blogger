@@ -63,6 +63,15 @@
 
 ## 변경 기록
 
+### 2026-10-22 — Seed browser runner receipt selection
+- 증상/요구: 사용자가 QA 워크플로를 등록해 실제 판매자·구매자 검증을 요청함.
+- 확인 근거: https://github.com/noriplaystudio-debug/blogger/actions/runs/39735641576; source de09435bb52680ae446815b3c0ccfb4dd776b9d6. doctor 통과, 거래 흐름 7/17 통과, 8단계 strict mode 실패.
+- 원인: 보관함의 그림과 거래 확인 버튼이 같은 주문 ID/action을 가져 러너가 두 버튼을 선택함. 제품 결함으로 판정하지 않음.
+- 변경: seed-market/tests/browser.test.mjs 거래 확인을 패널·주문 ID·버튼 이름으로 한정. 전용 워크플로는 등록된 QA 소스 커밋을 직접 검사하는 일반 CI로 전환. 앱 검증/이력 문서 갱신.
+- 검증: 로컬 57개 모듈·서버/API/DB/템플릿 8묶음·QA 도구 검사 통과. 수정 후 브라우저 전체 결과는 새 Actions 실행에서 확인.
+- 배포: 사이트 미배포. 기존 Blogger 코드·main·운영 배포·예약 중단 상태는 유지.
+
+
 ### 2026-10-22 — Seed market QA source bootstrap
 - 증상/요구: 사용자가 blogger 저장소에서 아이디어 마켓 자동 검증을 요청함.
 - 확인 근거: Seed QA source snapshot 498614f1c438b0bdaafd76f274ff2ba1d17c179930415d18acc9ed9a299a0add; https://github.com/noriplaystudio-debug/blogger/actions/runs/39735641576

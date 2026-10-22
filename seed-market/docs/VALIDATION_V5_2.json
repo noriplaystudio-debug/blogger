@@ -1,6 +1,6 @@
 {
   "version": "5.2.0",
-  "checkedAt": "2026-10-21T23:01:40.422884+00:00",
+  "checkedAt": "2026-10-22T06:53:01.904092+00:00",
   "staticCheck": {
     "status": "passed",
     "modules": 57
@@ -20,16 +20,25 @@
     "data": "explicitly fictional design samples"
   },
   "browser": {
-    "status": "blocked",
-    "passedSteps": 0,
-    "result": "/workspace/sites/seed-market/.sites-runtime/browser-qa/doctor-1792623378026-1dd26bef/result.json",
-    "journey": "not-run",
-    "configuredSteps": 17
+    "status": "baseline-failed; runner correction pending browser retest",
+    "passedSteps": 7,
+    "result": "https://github.com/noriplaystudio-debug/blogger/actions/runs/39735641576",
+    "testedCommit": "de09435bb52680ae446815b3c0ccfb4dd776b9d6",
+    "journey": "failed at step 8: ambiguous receipt selector in test runner",
+    "configuredSteps": 17,
+    "doctor": "passed on GitHub runner",
+    "screenshots": 9,
+    "traces": 5,
+    "productJavaScriptErrors": 0
   },
   "deployment": {
     "status": "not-deployed",
     "reason": "Existing hosting identity refers to another calculator project; supported publisher unavailable."
   },
   "priceGuidelines": "unchanged; no automatic adjustment from opinions",
-  "livePayments": "not-connected"
+  "livePayments": "not-connected",
+  "qaTooling": {
+    "status": "passed",
+    "browserCorrection": "prepared; pending GitHub browser rerun"
+  }
 }

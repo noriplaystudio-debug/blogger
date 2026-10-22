@@ -19,6 +19,7 @@ concurrency:
 
 jobs:
   browser-qa:
+    if: github.repository == 'noriplaystudio-debug/blogger' && github.ref == 'refs/heads/codex/seed-market-qa'
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     defaults:
@@ -28,6 +29,7 @@ jobs:
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
       SEED_QA_ARTIFACTS_DIR: .sites-runtime/qa-artifacts
       SEED_QA_BROWSER_IMAGE: github-hosted/ubuntu-24.04-preinstalled-chrome
+      SEED_QA_SOURCE_SHA: ${{ github.sha }}
     steps:
       - name: Checkout the QA commit
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
