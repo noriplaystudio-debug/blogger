@@ -25,7 +25,7 @@ const icon=name=>'<svg class="icon" aria-hidden="true"><use href="#i-'+name+'"/>
 const money=value=>new Intl.NumberFormat("ko-KR").format(value);
 const button=(action,label,id="",cls="button")=>'<button type="button" class="'+h(cls)+'" data-action="'+h(action)+'" data-id="'+h(id)+'">'+h(label)+'</button>';
 const header=title=>'<div class="dialog-header"><div><span class="dialog-eyebrow">DESIGN PREVIEW · SELLER STUDIO</span><h2 id="dialog-title" tabindex="-1">'+h(title)+'</h2></div><button type="button" class="icon-button" data-preview="close" aria-label="닫기">'+icon("close")+'</button></div>';
-const styles=(await Promise.all(["style.css","operations.css","experience.css","taxonomy.css","journeys.css","pricing-sharing.css","valuations.css","patents.css"].map(name=>readFile(resolve(root,"public/assets",name),"utf8")))).join("\n").replace(/@import url\(.*?\);/g,"");
+const styles=(await Promise.all(["style.css","operations.css","experience.css","taxonomy.css","journeys.css","pricing-sharing.css","valuations.css","patents.css","platform-notices.css"].map(name=>readFile(resolve(root,"public/assets",name),"utf8")))).join("\n").replace(/@import url\(.*?\);/g,"");
 let html=await readFile(resolve(root,"ui/index.html"),"utf8");
 html=html.replace(/<link rel="stylesheet"[^>]*>/g,"").replace(/<script type="module"[^>]*><\/script>/g,"");
 for(const name of ["idea-board.svg","favicon.svg"]){const svg=await readFile(resolve(root,"public/assets",name),"utf8");html=html.replaceAll("/assets/"+name,"data:image/svg+xml;charset=utf-8,"+encodeURIComponent(svg));}

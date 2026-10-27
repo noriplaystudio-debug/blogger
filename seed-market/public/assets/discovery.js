@@ -59,7 +59,7 @@ export function createDiscoveryUI(ctx){
     $(".search-clear").hidden=!$("#search-input").value;
     const chips=selectedFilters();$("#filter-count").textContent=chips.filter(x=>x[0]!=="q").length;
     $("#active-filters").innerHTML=chips.map(([key,label])=>'<button type="button" class="filter-chip" data-discover="remove-filter" data-filter="'+key+'" aria-label="'+h(label)+' 조건 해제">'+h(label)+icon("close")+'</button>').join("");
-    $("#search-result-note").textContent=(filters.priceType==="use"?"가격 필터·가격순 정렬은 독점 사용료 기준입니다. ":"")+(filters.sort==="relevance"?"관련도는 제목·태그·공개 요약의 일치도를 기준으로 정렬해요.":"기획 수준은 판매자가 선택하며 사업성과 법적 권리를 보증하지 않아요.");
+    $("#search-result-note").textContent=(filters.priceType==="use"?"가격 필터·가격순 정렬은 단독 이용료 기준입니다. ":"")+(filters.sort==="relevance"?"관련도는 제목·태그·공개 요약의 일치도를 기준으로 정렬해요.":"기획 수준은 판매자가 선택하며 사업성과 법적 권리를 보증하지 않아요.");
     if(focusedCategory)document.querySelector('#category-tabs [data-category="'+focusedCategory+'"]').focus({preventScroll:true});
   }
   function skeleton(){return Array.from({length:6},()=>'<article class="idea-card discovery-skeleton" aria-hidden="true"><div></div><p></p><p></p><span></span></article>').join("");}

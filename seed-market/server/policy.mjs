@@ -1,12 +1,13 @@
 import {CATALOG,TOPICS,DOMAINS,MATURITY_LABELS} from "../public/assets/catalog.js";
+import {PLATFORM_NOTICE_TEXT} from "../public/assets/platform-policy.js";
 import {PATENT_PURCHASE_NOTICE} from "../public/assets/patent-policy.js";
 export const CATEGORIES = Object.freeze(Object.fromEntries(Object.entries(CATALOG).map(([id,data])=>[id,data.label])));
 export const MATURITIES = MATURITY_LABELS;
-export const TERMS_VERSION = "2026-10-22-patent-draft-v2";
-export const SELLER_TERMS_VERSION = "2026-10-20-seller-draft-v1";
-export function sellerTermsText(c){return "이 아이디어의 열람권 수수료는 "+c.viewBps/100+"%, 독점 사용권 수수료는 "+c.useBps/100+"%입니다. 원 미만 수수료는 내림 처리하며, 결제 후 "+c.holdDays+"일간 정산을 대기합니다. 신고·환불·분쟁 검토 중인 거래는 정산을 보류합니다. PG 비용과 세금 차감 전의 예상액이며, 현재는 실제 청구·송금 없는 테스트입니다. 이 조건은 등록 시 저장되어 기존 아이디어와 주문에 소급 변경되지 않습니다. 직접 작성했거나 판매 권한이 있는 자료만 등록하며, 운영 검토가 아이디어의 법적 보호나 사업성을 보증하지 않음을 확인합니다.";}
-export const VIEW_PLEDGE = "열람료는 상세 내용 확인의 대가이며 아이디어의 사용권을 포함하지 않습니다. 별도 독점 사용권을 취득하기 전에는 열람한 자료를 복제·배포하거나 해당 자료를 이용해 사업을 실행하지 않겠습니다. 무단 이용 시 계약과 관계 법령에 따른 법적 책임이 발생할 수 있음을 확인합니다. 다른 구매자가 독점 사용권을 취득하면 유료 열람 이력이 있어도 상세 재열람이 중단됨에 동의합니다. "+PATENT_PURCHASE_NOTICE;
-export const USE_PLEDGE = "별도 사용료로 이 서비스에서의 독점 사용권을 취득하며, 이후 다른 구매자의 상세 접근이 중단되는 조건을 확인했습니다. 실제 권리의 범위는 판매자가 보유한 권리와 최종 계약에 따르며, 아이디어 자체의 법적 보호가 자동으로 보장되지는 않습니다. "+PATENT_PURCHASE_NOTICE;
+export const TERMS_VERSION = "2026-10-27-sharing-draft-v3";
+export const SELLER_TERMS_VERSION = "2026-10-27-seller-sharing-v2";
+export function sellerTermsText(c){return "이 아이디어의 열람권 수수료는 "+c.viewBps/100+"%, 단독 이용권 수수료는 "+c.useBps/100+"%입니다. 원 미만 수수료는 내림 처리하며, 결제 후 "+c.holdDays+"일간 정산을 대기합니다. 신고·환불·분쟁 검토 중인 거래는 정산을 보류합니다. PG 비용과 세금 차감 전 예상액이며 현재는 실제 청구·송금 없는 테스트입니다. 제공할 권한이 있는 자료를 등록하고 제공 범위·출처·미확인 가설과 한계를 사실대로 안내합니다. 기존에 합의한 거래 조건과 법령상 책임은 이 안내로 소급 변경하지 않습니다.\n\n"+PLATFORM_NOTICE_TEXT;}
+export const VIEW_PLEDGE = "열람료는 상세 설명·기획·참고 자료를 살펴보는 대가입니다. 자료 원문의 복제·배포·상업적 재이용은 별도로 안내된 권한과 이용 조건을 확인합니다. 일반적인 발상이나 독립적으로 만든 결과물의 권리가 구매만으로 제한되거나 새로 생긴다는 뜻은 아닙니다. 다른 구매자가 사이트 내 단독 이용권을 취득하면 기존 유료 열람자의 상세 재열람이 종료되는 조건을 확인합니다. "+PATENT_PURCHASE_NOTICE+"\n\n"+PLATFORM_NOTICE_TEXT;
+export const USE_PLEDGE = "추가 단독 이용권은 이 사이트에서 해당 자료의 추가 판매와 다른 구매자의 상세 재열람을 종료하는 조건입니다. 자료를 이용할 수 있는 범위는 판매자가 실제 보유한 권리와 제공 조건에 따릅니다. 아이디어 자체나 제3자의 특허에 대한 법적 독점권을 취득하는 것은 아닙니다. "+PATENT_PURCHASE_NOTICE+"\n\n"+PLATFORM_NOTICE_TEXT;
 export const TEST_NOTICE = "현재는 테스트 결제입니다. 실제 금전 청구나 법적 사용권 이전은 발생하지 않습니다. 서약 문구는 법률 검토 전 초안입니다.";
 export class AppError extends Error { constructor(status,message){super(message);this.status=status;} }
 export const fail=(status,message)=>{throw new AppError(status,message);};

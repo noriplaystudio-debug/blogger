@@ -1,8 +1,10 @@
+import {PLATFORM_NOTICE,PLATFORM_NOTICE_TEXT} from "../public/assets/platform-policy.js";
+import {platformNoticeHTML} from "../public/assets/platform-notices.js";
 import assert from "node:assert/strict";
 import {createLocalDB} from "../server/sqlite.mjs";
 import {handleAPI} from "../server/api.mjs";
-import {TERMS_VERSION,SELLER_TERMS_VERSION} from "../server/policy.mjs";
-import {validatePatentDeclaration,officialPatentUrl} from "../server/patents.mjs";
+import {TERMS_VERSION,SELLER_TERMS_VERSION,sellerTermsText} from "../server/policy.mjs";
+import {validatePatentDeclaration,officialPatentUrl,validatePatentReferences} from "../server/patents.mjs";
 import {patentFromValues,patentToValues,patentSourceUrl} from "../public/assets/patent-policy.js";
 import {patentDisclosureHTML,patentReviewHTML} from "../public/assets/patents.js";
 import {patentDraft,patentReview} from "./patent-fixtures.mjs";
@@ -27,78 +29,81 @@ async function review(id,{status="approved",patent=patentReview,...extra}={}){
 async function checkout(id,{user="buyer",stamp,key=crypto.randomUUID(),body={},environment=env}={}){return post("/api/ideas/"+id+"/checkout",user,{kind:"view",agree:true,termsVersion:TERMS_VERSION,patentStamp:stamp,...body},{key,environment});}
 function beforeBatch(match,action){let injected=false;return {...env,DB:{...db,prepare(sql){const wrap=statement=>({...statement,_sql:sql,bind(...args){return wrap(statement.bind(...args));}});return wrap(db.prepare(sql));},async batch(statements){if(!injected&&statements.some(s=>match(s._sql))){injected=true;await action();}return db.batch(statements);}}};}
 function badDeclaration(value){assert.throws(()=>validatePatentDeclaration(value),e=>e.status===400);}
-
-for(const patch of [{status:"certified"},{authority:""},{ownershipNote:"짧음"},{acknowledged:false},{policyVersion:"old"},{status:"not_applicable",scope:"",nonApplicableReason:""},{priorArt:"self_searched",priorArtNote:""},{status:"registered",number:"10-12",holder:"신고자"},{status:"unfiled",number:"10-2026-0123456"}])badDeclaration({...patentDraft,...patch});
-assert.equal(validatePatentDeclaration({...patentDraft,status:"not_applicable",scope:"",nonApplicableReason:"음악의 창작 콘셉트를 제공하며 기술적 발명에 대한 검토는 별도로 요청하지 않는 테스트입니다."}).status,"not_applicable");
+const publication={number:"US20070006557A1",title:"Filter system for respiratory mask and method of implementing the filter system",jurisdiction:"US",kind:"application",url:"https://patents.google.com/patent/US20070006557A1/en",checkedDate:"2026-10-27",note:"공개 공보의 예시이며 이 테스트에서 실제 기획과의 유사성은 판단하지 않습니다."};
+const grant={number:"KR102302296B1",title:"필터 탈착형 마스크",jurisdiction:"KR",kind:"grant",url:"https://patents.google.com/patent/KR102302296B1/ko",checkedDate:"2026-10-27",note:"등록공보의 존재만 안내하며 현재 권리 존속과 침해 여부는 판단하지 않습니다."};
+for(const patch of [{status:"certified"},{authority:""},{scope:"가".repeat(1001)},{status:"registered",number:"10-12"}])badDeclaration({...patentDraft,...patch});
+assert.equal(validatePatentDeclaration(null).status,"unsure");assert.equal(validatePatentDeclaration(null).acknowledged,false);
+assert.equal(validatePatentDeclaration({...patentDraft,ownershipNote:"",scope:"",acknowledged:false}).acknowledged,false);
+assert.equal(validatePatentDeclaration({...patentDraft,status:"not_applicable",scope:"",nonApplicableReason:""}).status,"not_applicable");
 assert.equal(patentFromValues(patentToValues(patentDraft)).acknowledged,false);
-const missingImage=await upload();assert.equal((await post("/api/ideas","seller",{...base,imageIds:[missingImage]})).status,400);
-console.log("PASS mandatory patent declaration, conditional evidence, number formats and renewed consent");
+console.log("PASS optional patent information, safe defaults, input limits and no invented consent");
 
-const privateMarker="PRIVATE-RIGHTS-ONLY",first=await listing({...patentDraft,scope:privateMarker+patentDraft.scope,ownershipNote:privateMarker+patentDraft.ownershipNote});
-assert.equal((await review(first.id,{patent:null})).status,400);
-assert.equal((await review(first.id,{outcome:"expert_required"})).status,400);
-assert.equal((await review(first.id,{ownership:"needs_more"})).status,400);
-assert.equal((await review(first.id,{status:"rejected",outcome:"needs_info",ownership:"needs_more"})).status,200);
-const revise={...first.input,expectedVersion:1};assert.equal((await post("/api/ideas/"+first.id+"/revise","seller",revise,{key:"patent-revise-one"})).status,201);
-assert.equal((await detail(first.id)).patentPrivate.revision,0);
-assert.equal((await detail(first.id)).patentDisclosure.state,"pending");
-assert.equal((await review(first.id,{expectedRevision:1})).status,409);
-assert.equal((await review(first.id)).status,200);
-assert.equal((await call("/api/ideas/"+first.id+"/edit",{user:"other-seller"})).status,404);
-const publicData=await detail(first.id,"buyer");assert.equal(publicData.patentPrivate,undefined);assert.ok(!JSON.stringify(publicData).includes(privateMarker));
-const operatorData=await detail(first.id,"operator");assert.ok(JSON.stringify(operatorData.patentPrivate).includes(privateMarker));
-console.log("PASS publication gate, resubmission resets rights review and private seller/operator evidence");
+const optional=await listing(undefined); // Omit the declaration entirely in an actual API call too.
+const image=await upload();const minimal=await post("/api/ideas","seller",{...base,imageIds:[image]});assert.equal(minimal.status,201);
+assert.equal((await review(minimal.data.id,{patent:null})).status,200);
+assert.equal((await checkout(minimal.data.id,{stamp:(await detail(minimal.data.id,"buyer")).patentDisclosure.stamp})).status,201);
+assert.equal((await post("/api/ideas","seller",{...base,imageIds:[],sellerAgreement:false})).status,400);
+console.log("PASS registration/publication/purchase without patent declaration or review");
 
-assert.equal((await checkout(first.id)).status,409);
-assert.equal((await checkout(first.id,{stamp:"1:999"})).status,409);
-const key="patent-snapshot-purchase",purchase=await checkout(first.id,{stamp:publicData.patentDisclosure.stamp,key,body:{patentDisclosure:{statusLabel:"특허 보장"}}});assert.equal(purchase.status,201);
-const receipt=await call("/api/orders/"+purchase.data.order.id,{user:"buyer"}),snapshot=receipt.data.patentDisclosure;
-assert.deepEqual(snapshot,publicData.patentDisclosure);assert.ok(!JSON.stringify(receipt.data).includes(privateMarker));
-assert.ok(!JSON.stringify((await call("/api/ideas/"+first.id+"/details",{user:"buyer"})).data).includes(privateMarker));
-assert.equal((await call("/api/orders/"+purchase.data.order.id,{user:"other-buyer"})).status,404);
-assert.equal((await review(first.id,{status:"suspended",outcome:"expert_required",freedomToOperate:"expert_required"})).status,200);
-assert.deepEqual((await call("/api/orders/"+purchase.data.order.id,{user:"buyer"})).data.patentDisclosure,snapshot);
-console.log("PASS current disclosure required, server snapshot ignores client claims and survives later review");
+for(const state of ["pending","recorded","needs_info","expert_required"]){
+ const item=await listing(validatePatentDeclaration(null));
+ assert.equal((await review(item.id,{patent:state==="pending"?null:{...patentReview,outcome:state,ownership:"needs_more",novelty:"expert_required",freedomToOperate:"expert_required"}})).status,200);
+ const p=(await detail(item.id,"buyer")).patentDisclosure;assert.equal(p.state,state);assert.equal(p.blocking,false);
+ assert.equal((await checkout(item.id,{stamp:p.stamp})).status,201);
+ if(state==="expert_required"){assert.equal((await checkout(item.id,{stamp:p.stamp,body:{kind:"use"}})).status,201);assert.equal((await detail(item.id,"buyer")).idea.status,"sold");}
+}
+console.log("PASS all reference states including uncertainty/expert advice allow approval and both purchases");
 
-const registered={...patentDraft,status:"registered",number:"10-1234567",holder:"PRIVATE-HOLDER",visibility:"private"},filed=await listing(registered);
-assert.equal((await review(filed.id)).status,400);
-assert.equal((await review(filed.id,{ownership:"source_compared",sourceUrl:"https://example.com/patent",checkedDate:"2026-10-22"})).status,400);
-for(const url of ["javascript:alert(1)","https://kipris.or.kr.evil.invalid/p","https://user:secret@www.kipris.or.kr/p","https://plus.kipris.or.kr/openapi?serviceKey=secret","https://www.kipris.or.kr/?access_token=secret","https://www.kipris.or.kr/p#secret"]){assert.throws(()=>officialPatentUrl(url));assert.equal(patentSourceUrl(url),null);}
-assert.equal((await review(filed.id,{ownership:"source_compared",sourceUrl:"https://www.kipris.or.kr/",checkedDate:"2099-01-01"})).status,400);
-assert.equal((await review(filed.id,{ownership:"source_compared",sourceUrl:"https://www.kipris.or.kr/",checkedDate:"2026-02-30"})).status,400);
-assert.equal((await review(filed.id,{ownership:"source_compared",sourceUrl:"https://www.kipris.or.kr/",checkedDate:"2026-10-22"})).status,200);
-const hidden=(await detail(filed.id,"buyer")).patentDisclosure;assert.equal(hidden.number,null);assert.equal(hidden.sourceUrl,null);assert.ok(!JSON.stringify(hidden).includes("PRIVATE-HOLDER"));
-const published=await listing({...registered,visibility:"public"});assert.equal((await review(published.id,{ownership:"source_compared",sourceUrl:"https://www.kipris.or.kr/",checkedDate:"2026-10-22"})).status,200);
-assert.equal((await detail(published.id,"buyer")).patentDisclosure.number,registered.number);
-console.log("PASS filed/registered official evidence, dates, secret-free links and explicit number visibility");
-
-for(const authority of ["authorized","shared","unsure"]){const item=await listing({...patentDraft,authority});assert.equal((await review(item.id)).status,400);if(authority!=="unsure")assert.equal((await review(item.id,{ownership:"source_compared"})).status,200);else assert.equal((await review(item.id,{ownership:"source_compared"})).status,400);}
-console.log("PASS delegated/co-owned rights require evidence comparison; unresolved authority cannot publish");
-
-const race=await listing();assert.equal((await review(race.id)).status,200);const before=(await detail(race.id,"other-buyer")).patentDisclosure;
-const raceEnv=beforeBatch(sql=>sql.startsWith("INSERT OR IGNORE INTO orders"),async()=>{assert.equal((await review(race.id,{status:"suspended",outcome:"expert_required",freedomToOperate:"expert_required"})).status,200);});
-const raced=await checkout(race.id,{user:"other-buyer",stamp:before.stamp,environment:raceEnv});assert.equal(raced.status,409);
-for(const table of ["orders","view_grants","licenses"])assert.equal((await db.prepare("SELECT count(*) AS n FROM "+table+" WHERE idea_id=?").bind(race.id).first()).n,0);
-assert.equal((await db.prepare("SELECT count(*) AS n FROM order_patent_disclosures d JOIN orders o ON o.id=d.order_id WHERE o.idea_id=?").bind(race.id).first()).n,0);
-assert.equal((await db.prepare("SELECT count(*) AS n FROM order_financials f JOIN orders o ON o.id=f.order_id WHERE o.idea_id=?").bind(race.id).first()).n,0);
-console.log("PASS rights changed at transaction write prevents orders, grants, financials and disclosure records");
-
-const reviewRace=await listing();const concurrentEnv=beforeBatch(sql=>sql.startsWith("UPDATE idea_patents SET review_state"),async()=>{assert.equal((await review(reviewRace.id,{status:"rejected",outcome:"needs_info",ownership:"needs_more"})).status,200);});
-const concurrent=await post("/api/admin/ideas/"+reviewRace.id+"/review","operator",{status:"approved",expectedStatus:"pending",expectedVersion:1,reason:"동시에 보완 요청이 기록되는 동안 이전 자료를 승인하려는 검증입니다.",patentReview},{environment:concurrentEnv});assert.equal(concurrent.status,409);
-assert.equal((await detail(reviewRace.id)).idea.reviewStatus,"rejected");assert.equal((await detail(reviewRace.id)).patentDisclosure.state,"needs_info");
-const versionRace=await listing();const versionEnv=beforeBatch(sql=>sql.startsWith("UPDATE idea_patents SET review_state"),async()=>{assert.equal((await post("/api/ideas/"+versionRace.id+"/revise","seller",{...versionRace.input,expectedVersion:1},{key:"patent-during-review"})).status,201);});
-assert.equal((await post("/api/admin/ideas/"+versionRace.id+"/review","operator",{status:"approved",expectedStatus:"pending",expectedVersion:1,reason:"판매자가 신고 내용을 변경한 직후 이전 자료를 승인하려는 검증입니다.",patentReview},{environment:versionEnv})).status,409);
-assert.equal((await detail(versionRace.id)).patentDisclosure.state,"pending");assert.equal((await detail(versionRace.id)).patentPrivate.listingVersion,2);
-console.log("PASS concurrent operator review and seller revision cannot approve stale rights evidence");
-
-const legacy=await listing();await db.prepare("DELETE FROM idea_patents WHERE idea_id=?").bind(legacy.id).run();assert.equal((await review(legacy.id,{patent:null})).status,200);
-assert.equal((await detail(legacy.id,"buyer")).patentDisclosure.state,"unreported");
-const old=await checkout(legacy.id);assert.equal(old.status,201);
-await db.prepare("DELETE FROM order_patent_disclosures WHERE order_id=?").bind(old.data.order.id).run();assert.equal((await call("/api/orders/"+old.data.order.id,{user:"buyer"})).data.patentDisclosure,null);
-assert.ok(patentDisclosureHTML(null,{receipt:true}).includes("소급"));
-console.log("PASS legacy listings remain explicitly unreported and old receipts never invent historic review");
-
-const secret="NEVER-EXPOSE-API-KEY",settings=await call("/api/admin/settings",{user:"operator",environment:{...env,KIPRIS_PLUS_API_KEY:secret,KIPRIS_PLUS_PRODUCT_APPROVED:"true"}});assert.equal(settings.status,200);assert.equal(settings.data.patent.keyConfigured,true);assert.equal(settings.data.patent.automaticLookupEnabled,false);assert.ok(!JSON.stringify(settings.data).includes(secret));
+const privateMarker="PRIVATE-RIGHTS-ONLY",filed=await listing({...patentDraft,status:"registered",number:"10-1234567",holder:privateMarker,scope:privateMarker+patentDraft.scope,visibility:"private"});
+assert.equal((await review(filed.id,{patent:{...patentReview,outcome:"expert_required",references:[publication,{...grant,legalStatus:"active",cleared:true}]}})).status,200);
+const publicData=await detail(filed.id,"buyer");assert.equal(publicData.patentPrivate,undefined);assert.equal(publicData.patentDisclosure.number,null);
+assert.equal(publicData.patentDisclosure.references.length,2);assert.equal(publicData.patentDisclosure.references[0].kind,"application");assert.equal(publicData.patentDisclosure.references[1].legalStatus,"unverified");assert.equal(publicData.patentDisclosure.references[1].cleared,undefined);assert.ok(!JSON.stringify(publicData).includes(privateMarker));
+assert.ok(patentDisclosureHTML(publicData.patentDisclosure).includes("등록공보 · 현재 권리 존속 미확인"));assert.ok(patentDisclosureHTML(publicData.patentDisclosure).includes("출원 공개 문헌"));
+assert.ok(JSON.stringify((await detail(filed.id,"operator")).patentPrivate).includes(privateMarker));
 assert.equal((await call("/api/admin/settings",{user:"buyer"})).status,403);
-const attack='<img src=x onerror="alert(1)">';assert.ok(!patentDisclosureHTML({statusLabel:attack,sourceUrl:"javascript:alert(1)"}).includes(attack));assert.ok(!patentReviewHTML({revision:0,declaration:{...patentDraft,scope:attack}}).includes(attack));
-db.close();console.log("ALL PATENT DECLARATION / REVIEW / PURCHASE CHECKS PASSED");
+assert.equal((await post("/api/admin/ideas/"+filed.id+"/review","seller",{status:"approved"})).status,403);
+console.log("PASS structured public references distinguish application/grant and never expose private proof or certify active rights");
+
+for(const patch of [{kind:"grant"},{jurisdiction:"KR"},{url:"https://patents.google.com/patent/US4945907A/en"},{url:"https://example.com/patent"},{url:"https://patents.google.com/patent/US20070006557A1?serviceKey=secret"},{checkedDate:"2099-01-01"},{checkedDate:"2026-02-30"},{number:"not-a-patent"}])assert.throws(()=>validatePatentReferences([{...publication,...patch}]),e=>e.status===400);
+assert.throws(()=>validatePatentReferences([grant,grant]),e=>e.status===400);assert.throws(()=>validatePatentReferences(Array(7).fill(grant)),e=>e.status===400);
+for(const url of ["javascript:alert(1)","https://kipris.or.kr.evil.invalid/p","https://user:secret@www.kipris.or.kr/p","https://plus.kipris.or.kr/?serviceKey=secret","https://www.kipris.or.kr/?access_token=secret","https://www.kipris.or.kr/p#secret"]){assert.throws(()=>officialPatentUrl(url));assert.equal(patentSourceUrl(url),null);}
+console.log("PASS reference numbering/document type consistency, source links, dates, duplication and key redaction");
+
+assert.equal((await checkout(filed.id)).status,409);assert.equal((await checkout(filed.id,{stamp:"1:999"})).status,409);
+const key="reference-snapshot-purchase",purchase=await checkout(filed.id,{stamp:publicData.patentDisclosure.stamp,key,body:{patentDisclosure:{references:[],legalStatus:"cleared"}}});assert.equal(purchase.status,201);
+const receipt=await call("/api/orders/"+purchase.data.order.id,{user:"buyer"}),snapshot=receipt.data.patentDisclosure;assert.deepEqual(snapshot,publicData.patentDisclosure);assert.ok(!JSON.stringify(receipt.data).includes(privateMarker));
+assert.ok(receipt.data.pledge.text.includes(PLATFORM_NOTICE_TEXT));assert.equal(receipt.data.pledge.version,TERMS_VERSION);
+assert.ok(!JSON.stringify((await call("/api/ideas/"+filed.id+"/details",{user:"buyer"})).data).includes(privateMarker));
+assert.equal((await checkout(filed.id,{key,stamp:"stale"})).status,200);
+assert.equal((await review(filed.id,{patent:{...patentReview,outcome:"needs_info",references:[grant]}})).status,200);
+assert.deepEqual((await call("/api/orders/"+purchase.data.order.id,{user:"buyer"})).data.patentDisclosure,snapshot);
+const changed=(await detail(filed.id,"other-buyer")).patentDisclosure;assert.equal(changed.references.length,1);assert.equal((await checkout(filed.id,{user:"other-buyer",stamp:changed.stamp})).status,201);
+console.log("PASS consent and immutable server-authored reference snapshots, repeat requests and latest-info reconfirmation");
+
+const race=await listing();assert.equal((await review(race.id,{patent:null})).status,200);const before=(await detail(race.id,"other-buyer")).patentDisclosure;
+const raceEnv=beforeBatch(sql=>sql.startsWith("INSERT OR IGNORE INTO orders"),async()=>{assert.equal((await review(race.id,{patent:{...patentReview,outcome:"expert_required",references:[publication]}})).status,200);});
+assert.equal((await checkout(race.id,{user:"other-buyer",stamp:before.stamp,environment:raceEnv})).status,409);
+assert.equal((await detail(race.id,"other-buyer")).idea.reviewStatus,"approved");
+for(const table of ["orders","view_grants","licenses"])assert.equal((await db.prepare("SELECT count(*) AS n FROM "+table+" WHERE idea_id=?").bind(race.id).first()).n,0);
+assert.equal((await checkout(race.id,{user:"other-buyer",stamp:(await detail(race.id,"other-buyer")).patentDisclosure.stamp})).status,201);
+console.log("PASS simultaneous reference changes request fresh consent without legal-risk blocking or orphan orders");
+
+const reviewRace=await listing();const concurrentEnv=beforeBatch(sql=>sql.startsWith("UPDATE idea_patents SET review_state"),async()=>{assert.equal((await review(reviewRace.id,{patent:{...patentReview,outcome:"expert_required",references:[grant]}})).status,200);});
+const concurrent=await post("/api/admin/ideas/"+reviewRace.id+"/review","operator",{status:"approved",expectedStatus:"pending",expectedVersion:1,reason:"다른 운영자가 참고 정보를 수정한 직후 이전 화면을 저장하려는 검증입니다.",patentReview},{environment:concurrentEnv});assert.equal(concurrent.status,409);
+assert.equal((await detail(reviewRace.id)).idea.reviewStatus,"approved");assert.equal((await detail(reviewRace.id)).patentDisclosure.state,"expert_required");
+const versionRace=await listing();const versionEnv=beforeBatch(sql=>sql.startsWith("UPDATE idea_patents SET review_state"),async()=>{assert.equal((await post("/api/ideas/"+versionRace.id+"/revise","seller",{...versionRace.input,expectedVersion:1},{key:"reference-during-review"})).status,201);});
+assert.equal((await post("/api/admin/ideas/"+versionRace.id+"/review","operator",{status:"approved",expectedStatus:"pending",expectedVersion:1,reason:"판매자가 설명을 수정한 직후 이전 자료를 승인하려는 검증입니다.",patentReview},{environment:versionEnv})).status,409);assert.equal((await detail(versionRace.id)).idea.reviewStatus,"pending");
+console.log("PASS concurrent reference writes and seller edits retain publication/version guards");
+
+const legacy=await listing();await db.prepare("DELETE FROM idea_patents WHERE idea_id=?").bind(legacy.id).run();await db.prepare("DELETE FROM idea_quality WHERE idea_id=?").bind(legacy.id).run();
+assert.equal((await review(legacy.id,{patent:{...patentReview,references:[grant]},expectedRevision:0})).status,200);
+assert.equal((await detail(legacy.id,"buyer")).patentDisclosure.references.length,1);
+const old=await checkout(legacy.id,{stamp:(await detail(legacy.id,"buyer")).patentDisclosure.stamp});assert.equal(old.status,201);
+await db.prepare("DELETE FROM order_patent_disclosures WHERE order_id=?").bind(old.data.order.id).run();assert.equal((await call("/api/orders/"+old.data.order.id,{user:"buyer"})).data.patentDisclosure,null);assert.ok(patentDisclosureHTML(null,{receipt:true}).includes("소급"));
+console.log("PASS legacy zero-version listings can receive references; old receipts never invent past information");
+
+const secret="NEVER-EXPOSE-API-KEY",settings=await call("/api/admin/settings",{user:"operator",environment:{...env,KIPRIS_PLUS_API_KEY:secret,KIPRIS_PLUS_PRODUCT_APPROVED:"true"}});assert.equal(settings.data.patent.blocking,false);assert.equal(settings.data.patent.automaticLookupEnabled,false);assert.ok(!JSON.stringify(settings.data).includes(secret));
+const config=(await call("/api/config")).data;assert.equal(config.platformNotice.version,PLATFORM_NOTICE.version);assert.ok(config.sellerTerms.text.includes(PLATFORM_NOTICE_TEXT));assert.ok(config.viewPledge.includes(PLATFORM_NOTICE.limits));assert.ok(config.usePledge.includes("이 사이트"));
+assert.ok(sellerTermsText(config.commerce).includes("제공할 권한"));assert.ok(platformNoticeHTML().includes("법정 청약철회·환불"));assert.ok(platformNoticeHTML().includes("고의·중과실"));
+const attack='<img src=x onerror="alert(1)">';assert.ok(!patentDisclosureHTML({statusLabel:attack,references:[{...grant,title:attack,note:attack,url:"javascript:alert(1)"}]}).includes(attack));assert.ok(!patentReviewHTML({revision:0,declaration:{...patentDraft,scope:attack},review:{references:[{...grant,title:attack}]}}).includes(attack));
+db.close();console.log("ALL NONBLOCKING PATENT REFERENCES / IDEA SHARING NOTICES CHECKS PASSED");

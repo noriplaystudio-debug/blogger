@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#16483e">
-  <meta name="description" content="좋은 생각이 새로운 시작이 되는 곳. seed에서 다양한 분야의 아이디어를 발견하고, 나만의 아이디어를 소개해 보세요. 판매자와 구매자를 연결하고 상세 열람권과 독점 사용권을 별도로 거래하는 아이디어 마켓입니다.">
+  <meta name="description" content="묻혀 있던 아이디어와 실행할 사람을 연결하는 공유소. 요약으로 발견하고 열람료로 구체적인 설명·기획·참고 자료를 살펴보세요. 유사 특허는 참고 정보이며 권리나 사업 성과를 보증하지 않습니다.">
   <meta property="og:title" content="seed — 생각이 가능성이 되는 곳">
   <meta property="og:description" content="아이디어를 발견하고, 연결하고, 새로운 시작으로. 분야와 예산에 맞는 아이디어를 발견하고, 구체적인 기획과 실행 자료를 만나보세요.">
   <title>seed — 생각이 가능성이 되는 곳</title>
@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="/assets/pricing-sharing.css">
   <link rel="stylesheet" href="/assets/valuations.css">
   <link rel="stylesheet" href="/assets/patents.css">
+  <link rel="stylesheet" href="/assets/platform-notices.css">
   <script type="module" src="/assets/app.js"></script>
 </head>
 <body>
@@ -77,6 +78,7 @@
     <nav class="mobile-nav" id="mobile-nav" aria-label="모바일 메뉴" hidden><a href="#marketplace">아이디어 둘러보기</a><a href="#sharing">아이디어 나눔터</a><a href="#categories">카테고리</a><a href="#how-it-works">이용 방법</a><button type="button" data-action="library">내 보관함</button></nav>
   </header>
   <main>
+    <div class="platform-notice-banner"><div class="container"><span>공지 · 열람료로 구체적인 기획을 살펴보는 아이디어 공유소입니다. 특허 정보는 참고용입니다.</span><button type="button" class="text-button" data-action="notice">거래 원칙 확인</button></div></div>
     <section class="hero hero-v3" aria-labelledby="banner-heading">
       <div class="container hero-inner">
         <div class="hero-copy">
@@ -118,15 +120,16 @@
     <section class="how-section" id="how-it-works" aria-labelledby="how-heading">
       <div class="container">
         <div class="section-heading"><div><p class="section-kicker">HOW SEED WORKS</p><h2 id="how-heading">생각에서 시작까지, 세 걸음.</h2></div><p class="how-intro">아이디어가 있는 사람과<br>실행하고 싶은 사람이 만나는 방법.</p></div>
-        <div class="steps-grid"><article class="step"><div class="step-top"><span>01</span><svg class="icon"><use href="#i-search"/></svg></div><h3>마음에 드는 생각 발견하기</h3><p>아이디어 종류와 관련 분야를 둘러보고, 아이디어의 공개 요약과 제공 자료를 확인하세요.</p></article><article class="step"><div class="step-top"><span>02</span><svg class="icon"><use href="#i-file"/></svg></div><h3>아이디어의 가능성 살펴보기</h3><p>열람료를 결제하고 비사용 서약에 동의한 뒤, 구체적인 기획과 참고 이미지를 확인하세요.</p></article><article class="step"><div class="step-top"><span>03</span><svg class="icon"><use href="#i-sprout"/></svg></div><h3>당신만의 시작으로 연결하기</h3><p>추가 사용료로 독점 사용권을 취득하면 판매완료 처리되어 다른 구매자의 상세 열람이 종료돼요.</p></article></div>
+        <div class="steps-grid"><article class="step"><div class="step-top"><span>01</span><svg class="icon"><use href="#i-search"/></svg></div><h3>마음에 드는 생각 발견하기</h3><p>아이디어 종류와 관련 분야를 둘러보고, 아이디어의 공개 요약과 제공 자료를 확인하세요.</p></article><article class="step"><div class="step-top"><span>02</span><svg class="icon"><use href="#i-file"/></svg></div><h3>아이디어의 가능성 살펴보기</h3><p>열람료를 결제하고 비사용 서약에 동의한 뒤, 구체적인 기획과 참고 이미지를 확인하세요.</p></article><article class="step"><div class="step-top"><span>03</span><svg class="icon"><use href="#i-sprout"/></svg></div><h3>당신만의 시작으로 연결하기</h3><p>추가 사용료로 단독 이용권을 취득하면 판매완료 처리되어 다른 구매자의 상세 열람이 종료돼요.</p></article></div>
       </div>
     </section>
     <section class="container seller-section">
       <div class="seller-banner"><div class="seller-copy"><p class="section-kicker">YOUR IDEA MATTERS</p><h2>머릿속에만 두기엔,<br>너무 좋은 아이디어니까.</h2><p>당신의 생각이 누군가의 다음 시작이 될 수 있어요.</p><button class="button button-dark" type="button" data-action="create">내 아이디어 등록하기<svg class="icon"><use href="#i-up"/></svg></button></div><div class="seller-art" aria-hidden="true"><span class="seller-orbit"></span><svg class="big-sprout" viewBox="0 0 200 200"><path d="M102 179V85" fill="none" stroke="#204e3c" stroke-width="5" stroke-linecap="round"/><path d="M104 127C43 135 16 95 24 48c60-3 93 27 80 79Z" fill="#75ad64" stroke="#204e3c" stroke-width="2"/><path d="M103 88C94 29 129 4 180 13c4 57-26 87-77 75Z" fill="#f4f6c2" stroke="#204e3c" stroke-width="2"/><path d="m45 70 59 57m0-39 53-51" fill="none" stroke="#204e3c" stroke-width="2"/></svg><span class="seller-sticker">LET YOUR<br>IDEA GROW ↗</span></div></div>
     </section>
-    <section class="container faq-section" aria-labelledby="faq-heading"><div><p class="section-kicker">A LITTLE MORE</p><h2 id="faq-heading">궁금한 점이 있나요?</h2><p>시작하기 전에, seed를 조금 더 알아보세요.</p></div><div class="faq-list"><details><summary>권장 상한액에 꼭 맞춰야 하나요?<svg class="icon"><use href="#i-plus"/></svg></summary><p>판매자는 더 낮거나 높은 가격으로 자유롭게 등록할 수 있어요. seed는 판매자가 선택한 기획 수준과 자료 기준에 따른 초기 권장 상한액을 등록·상세·결제 화면에 안내합니다. 초과 항목은 차액을 표시하며 구매를 막지 않아요. 시장 감정가나 품질 보증은 아니니 제공 자료와 전체 비용을 함께 확인하세요.</p></details><details><summary>어떤 아이디어를 등록할 수 있나요?<svg class="icon"><use href="#i-plus"/></svg></summary><p>판매자로 가입한 뒤 아이디어의 배경, 핵심 구성, 활용 대상, 제작·실행 계획과 참고 이미지를 등록해 검토를 요청할 수 있어요. 운영 검토가 끝나면 공개되며, 공개 요약과 상세 기획을 나누고, 수준에 맞는 열람료와 독점 사용료를 각각 정하세요.</p></details><details><summary>지금 실제로 결제되나요?<svg class="icon"><use href="#i-plus"/></svg></summary><p>현재는 테스트 결제 모드로 실제 청구 금액은 0원입니다. 화면에서 열람권과 독점 사용권을 나눠 구매하는 흐름을 경험할 수 있어요. 실제 결제 계정은 아직 연결하지 않았습니다.</p></details><details><summary>구매하면 어떤 권리를 얻나요?<svg class="icon"><use href="#i-plus"/></svg></summary><p>열람권은 내용을 확인할 권리이며 사용권을 포함하지 않습니다. 별도 독점 사용권을 구매하면 판매완료되어 다른 구매자의 상세 접근이 중단돼요. 실제 권리 범위와 계약은 법률 검토가 필요하며 테스트 결제로 실제 권리가 이전되지는 않습니다.</p></details></div></section>
+    <section class="container platform-notice-section" id="notices" aria-label="공지사항과 거래 원칙"><p class="section-kicker">OUR IDEA COMMONS</p><div id="platform-notice-content"><h2>아이디어를 발견하고, 구체적인 방향을 함께 살펴보는 곳</h2><p>열람료는 설명·기획·참고 자료를 살펴보는 대가입니다. 유사 특허는 참고 정보이며 등록·구매를 막는 판정이 아닙니다. 특허권·법적 독점성·사업 성과를 보증하지 않습니다.</p><p>관련 법령에 따른 이용자의 권리와 플랫폼의 책임은 이 안내로 배제하지 않습니다.</p><button type="button" data-action="notice" class="text-button">공지·거래 원칙 전문</button></div></section>
+    <section class="container faq-section" aria-labelledby="faq-heading"><div><p class="section-kicker">A LITTLE MORE</p><h2 id="faq-heading">궁금한 점이 있나요?</h2><p>시작하기 전에, seed를 조금 더 알아보세요.</p></div><div class="faq-list"><details><summary>권장 상한액에 꼭 맞춰야 하나요?<svg class="icon"><use href="#i-plus"/></svg></summary><p>판매자는 더 낮거나 높은 가격으로 자유롭게 등록할 수 있어요. seed는 판매자가 선택한 기획 수준과 자료 기준에 따른 초기 권장 상한액을 등록·상세·결제 화면에 안내합니다. 초과 항목은 차액을 표시하며 구매를 막지 않아요. 시장 감정가나 품질 보증은 아니니 제공 자료와 전체 비용을 함께 확인하세요.</p></details><details><summary>어떤 아이디어를 등록할 수 있나요?<svg class="icon"><use href="#i-plus"/></svg></summary><p>판매자로 가입한 뒤 아이디어의 배경, 핵심 구성, 활용 대상, 제작·실행 계획과 참고 이미지를 등록해 검토를 요청할 수 있어요. 운영 검토가 끝나면 공개되며, 공개 요약과 상세 기획을 나누고, 수준에 맞는 열람료와 단독 이용료를 각각 정하세요.</p></details><details><summary>지금 실제로 결제되나요?<svg class="icon"><use href="#i-plus"/></svg></summary><p>현재는 테스트 결제 모드로 실제 청구 금액은 0원입니다. 화면에서 열람권과 단독 이용권을 나눠 구매하는 흐름을 경험할 수 있어요. 실제 결제 계정은 아직 연결하지 않았습니다.</p></details><details><summary>구매하면 어떤 권리를 얻나요?<svg class="icon"><use href="#i-plus"/></svg></summary><p>열람료는 기획 자료를 살펴보는 대가입니다. 추가 단독 이용권은 이 사이트의 추가 판매와 다른 구매자의 상세 재열람을 종료하는 조건이며 특허권이나 아이디어 자체의 법적 독점권을 보장하지 않습니다. 자료의 재이용은 실제 권한과 제공 조건을 확인해야 합니다. 법정 소비자 권리는 공지로 배제하지 않습니다.</p></details></div></section>
   </main>
-  <footer class="site-footer"><div class="container footer-main"><div><a class="brand" href="/"><svg class="icon brand-mark"><use href="#i-sprout"/></svg><span>seed<span class="brand-dot">.</span></span></a><p>생각을 연결하고, 가능성을 키우다.</p></div><nav aria-label="서비스 안내"><button type="button" data-action="about">seed 소개</button><button type="button" data-action="terms">이용 안내</button><button type="button" data-action="privacy">개인정보 안내</button><button type="button" data-action="ops-cases">문의 · 신고</button></nav></div><div class="container footer-bottom"><span>© 2026 seed. A place for possibilities.</span><span>무료 나눔 · 권장 가격 안내 · 유료 상세 열람 · 현재 테스트 결제</span></div></footer>
+  <footer class="site-footer"><div class="container footer-main"><div><a class="brand" href="/"><svg class="icon brand-mark"><use href="#i-sprout"/></svg><span>seed<span class="brand-dot">.</span></span></a><p>생각을 연결하고, 가능성을 키우다.</p></div><nav aria-label="서비스 안내"><button type="button" data-action="about">seed 소개</button><button type="button" data-action="terms">이용 안내</button><button type="button" data-action="notice">공지 · 거래 원칙</button><button type="button" data-action="privacy">개인정보 안내</button><button type="button" data-action="ops-cases">문의 · 신고</button></nav></div><div class="container footer-bottom"><span>© 2026 seed. A place for possibilities.</span><span>무료 나눔 · 권장 가격 안내 · 유료 상세 열람 · 현재 테스트 결제</span></div></footer>
   <dialog id="app-dialog" aria-labelledby="dialog-title"><div id="dialog-content"></div></dialog>
   <div class="compare-tray" id="compare-tray" hidden></div>
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>

@@ -23,12 +23,12 @@ export function priceGuideFor(idea){
   return {version:PRICE_GUIDE_VERSION,mode:"advisory",basis:"seller-declared-maturity",maturity,label:MATURITY_LABELS[maturity],categoryLabel:CATALOG[idea.category]?.label||"분야별 아이디어",criteria:[...level.criteria],example:examples[idea.category]||examples.other,
     view:compare("view",idea.viewPrice),use:compare("use",idea.usePrice),recommendedTotal:level.view+level.use,
     note:"판매자가 선택한 기획 수준에 따른 초기 운영 참고 기준입니다. 개별 자료의 품질·시세·사업성이나 법적 독점권을 보증하지 않습니다.",
-    useBasis:"추가 독점 사용료는 열람료 권장 상한의 10배를 초기 참고액으로 정했습니다. 실제 거래 통계나 권리 감정으로 산정한 금액은 아닙니다."};
+    useBasis:"추가 단독 이용료는 열람료 권장 상한의 10배를 초기 참고액으로 정했습니다. 실제 거래 통계나 권리 감정으로 산정한 금액은 아닙니다."};
 }
 export function priceGuideHTML(guide,{kind=null,compact=false}={}){
   if(!guide)return "";
   const kinds=kind?[kind]:["view","use"],above=kinds.some(k=>guide[k].above);
-  const rows=kinds.map(k=>{const item=guide[k],label=k==="view"?"상세 열람료":"추가 독점 사용료";
+  const rows=kinds.map(k=>{const item=guide[k],label=k==="view"?"상세 열람료":"추가 단독 이용료";
     return '<div class="guide-price-row"><span>'+label+' 권장 상한</span><strong>'+won(item.recommendedMax)+'</strong></div>'+(item.sellerPrice!==null?'<p class="guide-comparison'+(item.above?' above':'')+'">'+(item.above?'판매가가 권장 상한보다 '+won(item.difference)+' 높아요.':'판매가 '+won(item.sellerPrice)+' · 권장 범위 이내')+'</p>':"");}).join("");
   return '<section class="price-guidance'+(above?' has-higher-price':'')+'" aria-label="플랫폼 권장 가격 안내"><div class="guide-heading"><span>seed 가격 안내</span><strong>'+h(guide.label)+' 기준</strong></div>'+rows+'<p class="guide-source">판매자 선택 수준에 따른 초기 참고액 · 감정가·품질 보증 아님</p><p class="guide-freedom">판매자가 자유롭게 정한 가격입니다. 권장 상한을 넘어도 등록·구매할 수 있어요.</p>'+(above?'<p class="guide-caution">제공 자료와 사용 범위를 확인하고 판매가가 적절한지 다시 살펴보세요.</p>':"")+(compact?'': '<details><summary>이 금액을 안내하는 기준</summary><p>'+h(guide.note)+'</p><ul>'+guide.criteria.map(x=>'<li>'+h(x)+'</li>').join("")+'</ul><p>'+h(guide.categoryLabel)+' 예: '+h(guide.example)+'</p><p>'+h(guide.useBasis)+'</p><p>열람·추가 사용료는 별도이며, 권장 합계는 '+won(guide.recommendedTotal)+'입니다. 권장액에 맞춘 가격도 품질 보증을 뜻하지 않아요.</p><small>기준 버전 '+h(guide.version)+'</small></details>')+'</section>';
 }

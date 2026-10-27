@@ -1,3 +1,4 @@
+import {PLATFORM_NOTICE} from "../public/assets/platform-policy.js";
 import { CATEGORIES,MATURITIES,TERMS_VERSION,SELLER_TERMS_VERSION,sellerTermsText,VIEW_PLEDGE,USE_PLEDGE,TEST_NOTICE,AppError,fail,imageType } from "./policy.mjs";
 import {commerceSettings,listingCommerce,financialStatements,reviewState,isOperator} from "./commerce.mjs";
 import {handleOperations} from "./operations.mjs";
@@ -64,7 +65,7 @@ export async function handleAPI(request,env,context={}){
   const listing=await handleListings({path,method,request,db,member,bodyJSON,json});if(listing)return listing;
   if(path==="/api/config"&&method==="GET"){
     const commerce=await commerceSettings(db);
-    return json({categories:CATEGORIES,taxonomy:CATALOG,kindGroups:KIND_GROUPS,domains:DOMAINS,taxonomyVersion:TAXONOMY_VERSION,maturities:MATURITIES,priceGuidance:{version:PRICE_GUIDE_VERSION,mode:"advisory",levels:PRICE_LEVELS},paymentMode:env.PAYMENTS_MODE==="test"?"test":"disabled",termsVersion:TERMS_VERSION,viewPledge:VIEW_PLEDGE,usePledge:USE_PLEDGE,testNotice:TEST_NOTICE,devMode:Boolean(context.devMode),commerce,sellerTerms:{version:SELLER_TERMS_VERSION,text:sellerTermsText(commerce)},auth:publicAuthSettings(env,context.authBackend||"sites")});
+    return json({platformNotice:PLATFORM_NOTICE,categories:CATEGORIES,taxonomy:CATALOG,kindGroups:KIND_GROUPS,domains:DOMAINS,taxonomyVersion:TAXONOMY_VERSION,maturities:MATURITIES,priceGuidance:{version:PRICE_GUIDE_VERSION,mode:"advisory",levels:PRICE_LEVELS},paymentMode:env.PAYMENTS_MODE==="test"?"test":"disabled",termsVersion:TERMS_VERSION,viewPledge:VIEW_PLEDGE,usePledge:USE_PLEDGE,testNotice:TEST_NOTICE,devMode:Boolean(context.devMode),commerce,sellerTerms:{version:SELLER_TERMS_VERSION,text:sellerTermsText(commerce)},auth:publicAuthSettings(env,context.authBackend||"sites")});
   }
   if(path==="/api/me"&&method==="GET")return json({authenticated:Boolean(identity),profile:me,isAdmin:isOperator(identity,env),auth:publicAuthSettings(env,context.authBackend||"sites"),signInUrl:"/signin-with-chatgpt?return_to="+encodeURIComponent("/#join"),signOutUrl:"/signout-with-chatgpt?return_to=/"});
   if(path==="/api/signup"&&method==="POST"){
@@ -171,7 +172,6 @@ export async function handleAPI(request,env,context={}){
       if(input.kind==="view"&&grant)return json({alreadyOwned:true,testNotice:TEST_NOTICE});
       if(input.kind==="use"&&!grant)fail(403,"상세 열람권을 먼저 구매해 주세요.");
       const patent=await patentRecord(db,id),patentDisclosure=publicPatent(patent),patentGuard=patentPurchaseGuard(patent,id);
-      if(patent&&patent.review_state!=="recorded")fail(409,"특허·권리 자료의 보완 또는 전문가 검토가 필요한 아이디어예요.");
       if((patent||input.patentStamp!==undefined)&&input.patentStamp!==patentDisclosure.stamp)fail(409,"특허·권리 안내가 변경됐어요. 최신 구매 화면에서 다시 확인해 주세요.");
       const time=now(),amount=input.kind==="view"?idea.view_price:idea.use_price;
       const insertOrder=db.prepare("INSERT OR IGNORE INTO orders(id,user_id,idea_id,kind,amount,mode,status,created_at) SELECT ?,?,?,?,?,'test','paid',? WHERE EXISTS(SELECT 1 FROM ideas WHERE id=? AND status='active') AND NOT EXISTS(SELECT 1 FROM idea_reviews WHERE idea_id=? AND status!='approved') AND NOT EXISTS(SELECT 1 FROM cases WHERE idea_id=? AND user_id=? AND kind IN ('refund','dispute') AND status IN ('open','reviewing'))"+(input.kind==="view"?" AND NOT EXISTS(":" AND EXISTS(")+"SELECT 1 FROM view_grants v LEFT JOIN refunds r ON r.order_id=v.order_id WHERE v.idea_id=? AND v.user_id=? AND r.id IS NULL) AND "+patentGuard.sql).bind(oid,me.id,id,input.kind,amount,time,id,id,id,me.id,id,me.id,...patentGuard.params);
@@ -189,7 +189,7 @@ export async function handleAPI(request,env,context={}){
       await db.batch(stmts);
       const order=await db.prepare("SELECT * FROM orders WHERE id=?").bind(oid).first();
       if(!order){
-        const latestPatent=await patentRecord(db,id);if(publicPatent(latestPatent).stamp!==patentDisclosure.stamp||latestPatent&&latestPatent.review_state!=="recorded")fail(409,"특허·권리 안내가 변경돼 결제를 진행하지 않았어요. 최신 자료를 다시 확인해 주세요.");
+        const latestPatent=await patentRecord(db,id);if(publicPatent(latestPatent).stamp!==patentDisclosure.stamp)fail(409,"특허·권리 안내가 변경돼 결제를 진행하지 않았어요. 최신 자료를 다시 확인해 주세요.");
         if(input.kind==="view"&&await db.prepare("SELECT 1 FROM view_grants v LEFT JOIN refunds r ON r.order_id=v.order_id WHERE v.idea_id=? AND v.user_id=? AND r.id IS NULL").bind(id,me.id).first())return json({alreadyOwned:true,testNotice:TEST_NOTICE});
         fail(409,"다른 구매자가 먼저 사용권을 구매했어요. 결제는 발생하지 않았습니다.");
       }
