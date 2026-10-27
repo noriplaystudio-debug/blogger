@@ -5,7 +5,8 @@
 - `npm run check`: 64 JavaScript 모듈·HTML 자산·고유 ID·호스팅 바인딩 검사 통과.
 - `npm test`: API/DB/템플릿 9묶음 통과. 특허 무입력과 모든 참고 상태에서 승인·열람/단독 이용 구매, 공보 구분·출처 링크·현재 존속 미검증, 공개/운영 정보 격리, 새 동의 전문, 주문 당시 기록, 동시 변경, 과거 자료 참고 추가 포함.
 - `npm run qa:tools-test`: 증거 보존·중단·아티팩트 제한 검사 통과.
-- 실제 브라우저는 공지 검사와 새 운영 흐름을 포함한 18단계로 원격 실행한다. 아래 v5.3의 17단계 성공은 이번 버전의 검증을 대신하지 않는다.
+- [Actions 40530146532](https://github.com/noriplaystudio-debug/blogger/actions/runs/40530146532), 소스 `660bbdc44d0a3c4fb19e297b472befa963ee9c20`에서 doctor 2단계·실제 브라우저 18단계 모두 통과. pageErrors 0, 실제 캡처 19개·원본 trace 7개. 검증일 2026-10-28 KST. [상세 증거·Work 인계 범위](QA_IDEA_SHARING_V5_4.md).
+- 인계 ZIP을 별도 디렉터리에 풀어 manifest와 소스 완전성을 확인하고 정적·9묶음·QA 도구 검사를 다시 통과했다. 호스팅 ID는 QA 전용으로 치환했다. Work의 재검증 자체는 아직 수행하지 않았다.
 - 서비스·원격 DB 미배포. KIPRIS API·법률 판단·실제 OAuth/PG·송금은 미검증이다.
 
 

@@ -63,6 +63,15 @@
 
 ## 변경 기록
 
+### 2026-10-28 — Seed v5.4 PC Work handoff and real browser verification
+- 근거: https://github.com/noriplaystudio-debug/blogger/actions/runs/40530146532 ; tested source 660bbdc44d0a3c4fb19e297b472befa963ee9c20.
+- 확인: 정적 64모듈·API/DB/템플릿 9묶음·QA 도구 검사, 실제 doctor 2단계·공지 포함 전체 18단계 모두 통과. pageErrors 0, 실제 PNG 19개·원본 trace 7개. Chrome 155.0.8059.39 / Playwright 1.62.1 / Node 24.21.0.
+- 증거: 검토본 12745094573 ZIP 체크섬·무결성·경로 검사 및 공지/공보 입력 화면 확인. 원본 12746990375에 trace 보존. 상세 기록 seed-market/docs/QA_IDEA_SHARING_V5_4.md.
+- 인계: 사용자의 PC Work 요청에 따라 v5.4 소스 ZIP·전문 프롬프트·실행 가이드·파일 manifest 제공. 실제 호스팅 ID는 QA 사본에서 제거하고 비밀·DB·업로드·캐시·비공개 아이디어 자료 제외. 추출 사본에서도 정적/9묶음/QA 도구 통과. Work 자체 재검증은 미실행이며 GitHub 통과와 구분.
+- 변경: 이번 후속 커밋은 문서·검증 기록만 갱신, 검사한 앱·테스트 코드는 동일.
+- 배포: QA 브랜치만 갱신. 서비스·원격 DB 미배포, Blogger 운영·main·중지된 자동화 변경 없음.
+
+
 ### 2026-10-28 — Seed v5.4 idea-sharing notices and nonblocking patent references
 - 요구: 10/27 사용자 결정으로 특허 유사성/미확인을 거래 차단에 쓰지 않고 참고 문헌으로 안내. 열람료로 구체적인 기획 자료를 검토하는 공유소의 목적과 판매/구매 공지를 반영. 10/28 PC Work 검증 ZIP·프롬프트·가이드 요청.
 - 원인/근거: v5.3에는 권리 확인·전문가 상태를 승인/구매 조건으로 삼는 로직이 존재. 플랫폼 목적과 일치하도록 사용자가 정책 변경을 지시함.

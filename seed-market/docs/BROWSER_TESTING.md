@@ -1,5 +1,12 @@
 # 실제 브라우저 검증 · QA-ENV-001
 
+## 최신 v5.4.0 · 2026-10-28 KST · 실제 브라우저 18/18 통과
+
+[Actions 40530146532](https://github.com/noriplaystudio-debug/blogger/actions/runs/40530146532), 소스 `660bbdc44d0a3c4fb19e297b472befa963ee9c20`. 공지·선택 특허 입력·상담 권장 상태 승인/거래·출원/등록 공보 안내를 포함해 doctor 2단계·전체 18단계 통과. pageErrors 0. 아래 17단계 기록은 이전 버전의 역사입니다.
+
+새 PC Work 검증은 [이번 가이드](WORK_QA_V5_4_PC.md)와 [전체 프롬프트](WORK_QA_V5_4_PROMPT.txt)를 사용합니다. 특허 미확인 때문에 거래를 차단하던 v5.3 기준은 적용하지 않습니다. [증거와 미검증 범위](QA_IDEA_SHARING_V5_4.md).
+
+
 ## 최종 확인 · 2026-10-22 · 실제 브라우저 17/17 통과
 
 [https://github.com/noriplaystudio-debug/blogger/actions/runs/39740383010](https://github.com/noriplaystudio-debug/blogger/actions/runs/39740383010)에서 doctor와 전체 17단계가 모두 통과했다. 검사한 소스는 `e6d9b15c67359f27dd814d3b2661992ef9145042`이며 Node 24.21.0, Chrome 155.0.8059.84, Playwright 1.62.1을 사용했다. 한국어 글꼴을 준비해 실제 캡처의 한글 표시도 확인했다. 스크린샷 17개와 trace 7개를 내려받아 결과 JSON·ZIP 무결성·아티팩트 체크섬을 확인했다.
