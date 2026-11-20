@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
       0,
     );
     const weeklyArticleTarget =
-      Number(progress.settings?.dailyArticleLimit || 0) * 7;
+      Number(progress.settings?.categoryCount || 0);
     const targetCategoryCount = Number(progress.settings?.categoryCount || 0);
     const targetKeywordCount =
       targetCategoryCount * Number(progress.settings?.keywordsPerCategory || 0);
