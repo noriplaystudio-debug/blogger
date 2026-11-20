@@ -3,9 +3,9 @@ import { extractCitations } from "@/lib/openai";
 import { parseJson } from "@/lib/models";
 
 export const PLANNING_LIMITS = {
-  categories: 5,
-  keywordsPerCategory: 5,
-  anglesPerKeyword: 2,
+  categories: 7,
+  keywordsPerCategory: 1,
+  anglesPerKeyword: 1,
   automaticArticlesPerDay: 7,
 };
 
@@ -17,9 +17,9 @@ export type PlanningSettings = {
 };
 
 export const DEFAULT_PLANNING_SETTINGS: PlanningSettings = {
-  categoryCount: 5,
-  keywordsPerCategory: 5,
-  articlesPerKeyword: 2,
+  categoryCount: 7,
+  keywordsPerCategory: 1,
+  articlesPerKeyword: 1,
   dailyArticleLimit: 7,
 };
 
@@ -483,7 +483,9 @@ export async function createCategoryStage(
     max_output_tokens: 3500,
     input: `최근 30일 한국의 공개 검색 관심 신호를 조사해 Google Blogger의 장기 운영 카테고리 후보만 선정한다. 아직 키워드나 글 방향은 만들지 않는다. 웹 검색은 필요한 검색어와 자료만 확인하고 최대 3회로 제한한다.
 
-요청 카테고리: 최대 ${settings.categoryCount}개. 정보 전달·용어 설명·조건 비교·생활 문제 해결처럼 3개월 이상 반복해서 검색될 evergreen 주제만 선정한다. 스포츠 경기 결과·연예 소식·사회 사건 속보처럼 관심이 급격히 사라지는 단발성 주제는 제외한다. 반복 검색되는 규칙·제도·이용 방법은 특정 사건을 다루지 않는 상시 설명형으로 다룰 수 있다.
+요청 카테고리: 정확히 ${settings.categoryCount}개를 목표로 한다. 각 카테고리는 이번 수동 운영에서 글 1개와 1:1로 대응한다. 별도의 하위 키워드 탐색 단계는 만들지 않는다.
+
+장기간 반복해서 검색되는 유지성 정보만 선정한다. 특히 대중교통 운행정보·노선/시간표 확인법·공공시설 이용안내·지역 행사 일정 확인법·축제/전시/박람회 일정·예약/신청 절차·지원제도 이용 조건·생활 행정·공공서비스·여행 준비 정보처럼 시기별 업데이트는 필요하지만 검색 수요가 반복되는 주제를 우선한다. 스포츠 경기 결과·선수 이슈·연예 뉴스·사회 사건·논란·속보처럼 며칠 안에 가치가 급격히 사라지는 스팟성 주제는 제외한다.
 
 블로그 수를 늘리지 않도록 독자 목적이 비슷한 카테고리를 3~4개씩 같은 blogGroupId로 묶는다. 전체 수량상 불가피할 때만 2개 묶음을 허용한다. 서로 완전히 무관한 주제는 한 묶음에 넣지 않는다. 블로그 이름은 특정 카테고리에 종속되지 않는 '오늘의 똑똑이', '알쓸 똑똑이' 같은 중립적인 브랜드형 이름으로 제안한다. 같은 blogGroupId의 카테고리는 추천 이름·소개·주소 후보가 모두 같아야 한다.
 
@@ -495,7 +497,7 @@ export async function createCategoryStage(
 성과 참고: ${JSON.stringify(context.performanceGuidance || []).slice(0, 8000)}
 수익 전략 참고: ${JSON.stringify(context.strategyGuidance || {}).slice(0, 6000)}
 
-JSON만 출력한다: {"weekLabel":"YYYY-MM-DD 시작 주간","marketSummary":"최근 30일 관심 신호와 12개월 지속성 근거 및 한계","methodNote":"정확한 월간 검색량과 상대 검색 관심 신호를 구분","categories":[{"name":"카테고리","contentMode":"evergreen","audience":"특정 독자","sitePurpose":"반복 해결할 문제","blogGroupId":"shared-group-1","suggestedBlogName":"중립적인 브랜드 이름","suggestedBlogDescription":"묶인 카테고리를 포괄하는 한 줄 소개","suggestedBlogAddresses":["address-one","address-two","address-three"],"reason":"선정 근거","trend":"상승|보합|판단보류","confidence":"높음|중간","scores":{"demand":0,"momentum":0,"durability":0,"accessibility":0,"adSafety":0,"sourceability":0},"searchVolumeLast30Days":null,"searchVolumeBasis":"unavailable|google_ads_keyword_planner|naver_search_ads","evidence":[{"signal":"최근 30일 공개 관심 신호; 절대 검색량이 아님","period":"최근30일|12개월","url":"https://..."}]}]}`,
+JSON만 출력한다: {"weekLabel":"YYYY-MM-DD 시작 주간","marketSummary":"최근 30일 관심 신호와 12개월 지속성 근거 및 한계","methodNote":"정확한 월간 검색량과 상대 검색 관심 신호를 구분","categories":[{"name":"카테고리","contentMode":"evergreen","audience":"특정 독자","sitePurpose":"반복 해결할 문제","articleTopic":"이번에 작성할 유지성 글의 구체 주제","intent":"정보형|비교형|문제해결형","titleIdea":"과장 없는 구체적 제목 아이디어","searchQuestion":"독자가 실제로 검색할 질문","answerPromise":"글이 직접 답할 내용","mustCover":["반드시 다룰 핵심 1","핵심 2","핵심 3"],"uniqueValue":"확인 순서·비교표·체크리스트 등 추가 가치","blogGroupId":"shared-group-1","suggestedBlogName":"중립적인 브랜드 이름","suggestedBlogDescription":"묶인 카테고리를 포괄하는 한 줄 소개","suggestedBlogAddresses":["address-one","address-two","address-three"],"reason":"선정 근거","trend":"상승|보합|판단보류","confidence":"높음|중간","scores":{"demand":0,"momentum":0,"durability":0,"accessibility":0,"adSafety":0,"sourceability":0},"searchVolumeLast30Days":null,"searchVolumeBasis":"unavailable|google_ads_keyword_planner|naver_search_ads","evidence":[{"signal":"최근 30일 공개 관심 신호; 절대 검색량이 아님","period":"최근30일|12개월","url":"https://..."}]}]}`,
   });
   const value = parseJson<any>(response.output_text);
   if (!Array.isArray(value?.categories) || !value.categories.length)
@@ -535,7 +537,73 @@ JSON만 출력한다: {"weekLabel":"YYYY-MM-DD 시작 주간","marketSummary":"�
     if (!String(category.audience || "").trim()) category.audience = "해당 정보를 찾는 일반 독자";
     if (!String(category.sitePurpose || "").trim()) category.sitePurpose = "검색 질문에 실용적인 답을 제공";
     if (!Array.isArray(category.evidence)) category.evidence = [];
-    category.keywords = [];
+    const articleTopic =
+      String(category.articleTopic || "").trim() ||
+      String(category.name || "").trim();
+    const intent = String(category.intent || "정보형").trim();
+    const titleIdea =
+      String(category.titleIdea || "").trim() ||
+      `${articleTopic} 이용·일정 확인 방법`;
+    const searchQuestion =
+      String(category.searchQuestion || "").trim() ||
+      `${articleTopic} 정보를 어디서 어떻게 확인하나요?`;
+    const mustCover = Array.isArray(category.mustCover)
+      ? category.mustCover.map(String).filter(Boolean).slice(0, 5)
+      : [];
+    category.keywords = [
+      {
+        keyword: articleTopic,
+        articleGroupKey: normalized(category.name || articleTopic),
+        umbrellaKeyword: articleTopic,
+        mergeScope: [],
+        contentMode: "evergreen",
+        intent,
+        clusterRole: "기둥글",
+        trend: category.trend,
+        confidence: category.confidence,
+        scores: {
+          demand: Number(category.scores?.demand || 50),
+          momentum: Number(category.scores?.momentum || 50),
+          durability: Number(category.scores?.durability || 70),
+          competitionOpportunity: 50,
+          sourceability: Number(category.scores?.sourceability || 60),
+          uniqueValue: 70,
+          topicalFit: 90,
+        },
+        reason: category.reason,
+        evidence: category.evidence,
+        searchVolumeLast30Days: null,
+        searchVolumeBasis: "unavailable",
+        singleKeywordCategory: true,
+        articleCountOverride: 1,
+        angles: [
+          {
+            titleIdea,
+            purpose:
+              String(category.answerPromise || "").trim() ||
+              "독자가 반복해서 찾는 이용·일정·절차 정보를 한 번에 확인할 수 있게 정리",
+            searchQuestion,
+            readerSituation: String(category.audience || "정보를 확인하려는 일반 독자"),
+            answerPromise:
+              String(category.answerPromise || "").trim() ||
+              "공식 확인 경로, 이용 조건, 일정·변경 확인 방법을 설명",
+            mustCover:
+              mustCover.length > 0
+                ? mustCover
+                : ["공식 확인 경로", "이용·신청 또는 일정 확인 절차", "변경 시 재확인 방법"],
+            exclusions: [
+              "연예·스포츠 단발성 속보",
+              "확인되지 않은 일정·수치·소문",
+              "사건·논란 중심의 스팟성 내용",
+            ],
+            uniqueValue:
+              String(category.uniqueValue || "").trim() ||
+              "독자가 직접 최신 정보를 확인할 수 있는 순서와 체크리스트",
+            contentMode: "evergreen",
+          },
+        ],
+      },
+    ];
     eligibleCategories.push(category);
   }
   eligibleCategories.sort(
