@@ -64,7 +64,12 @@ async function queueNext(req: NextRequest, runKey: string) {
   after(async () => {
     await fetch(`${origin}/api/cron/weekly-manual-worker?runKey=${encodeURIComponent(runKey)}`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${secret}` },
+      headers: {
+        Authorization: `Bearer ${secret}`,
+        ...(req.headers.get("x-blogger-manual-run") === "1"
+          ? { "x-blogger-manual-run": "1" }
+          : {}),
+      },
       cache: "no-store",
     }).catch(() => {});
   });
@@ -74,7 +79,9 @@ export async function POST(req: NextRequest) {
   let automationRunId: number | undefined;
   let activeRunKey = "";
   try {
-    assertCron(req);
+    assertCron(req, {
+      allowDuringMaintenance: req.headers.get("x-blogger-manual-run") === "1",
+    });
     if (!hasDatabase()) throw new Error("DATABASE_URL이 없습니다.");
     if (!process.env.OPENAI_API_KEY)
       throw new Error("OPENAI_API_KEY가 없습니다.");
@@ -136,7 +143,7 @@ export async function POST(req: NextRequest) {
         Array.isArray(category.keywords) &&
         category.keywords.length > 0,
     ).length;
-    const weeklyArticleTarget = Number(settings.dailyArticleLimit) * 7;
+    const weeklyArticleTarget = Number(settings.categoryCount);
     let articleCapacity = plannedArticleCapacity(draft, settings);
 
     const activeCandidates = () =>
