@@ -21,7 +21,12 @@ export async function POST(req: Request) {
     const current = await getAutomationConfig();
 
     const existingRunning = await getLatestRunningWeeklyPlanningProgress("manual");
-    if (existingRunning) {
+    const runningUsesCategoryOnlyShape =
+      existingRunning &&
+      Number(existingRunning.settings?.categoryCount) === 7 &&
+      Number(existingRunning.settings?.keywordsPerCategory) === 1 &&
+      Number(existingRunning.settings?.articlesPerKeyword) === 1;
+    if (existingRunning && runningUsesCategoryOnlyShape) {
       const origin = new URL(req.url).origin;
       const secret = process.env.CRON_SECRET;
       if (!secret) throw new Error("CRON_SECRET이 없습니다.");
@@ -112,11 +117,22 @@ export async function POST(req: Request) {
       0,
     );
     const weeklyArticleTarget = settings.categoryCount;
+    const existingUsesCategoryOnlyShape =
+      existingCategories.length > 0 &&
+      existingCategories.every(
+        (category: any) =>
+          Array.isArray(category?.keywords) &&
+          category.keywords.length === 1 &&
+          Array.isArray(category.keywords[0]?.angles) &&
+          category.keywords[0].angles.length === 1,
+      );
     const canResumeExisting =
+      existingUsesCategoryOnlyShape &&
       existingCategories.length > 0 &&
       existingArticleCapacity < weeklyArticleTarget;
 
     if (
+      existingUsesCategoryOnlyShape &&
       existingCategories.length >= settings.categoryCount &&
       existingArticleCapacity >= weeklyArticleTarget
     )
