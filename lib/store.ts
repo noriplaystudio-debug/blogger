@@ -35,9 +35,9 @@ export async function ensureSchema() {
       await sql`CREATE TABLE IF NOT EXISTS automation_config (
       id integer PRIMARY KEY DEFAULT 1 CHECK (id = 1),
       enabled boolean NOT NULL DEFAULT true,
-      category_count integer NOT NULL DEFAULT 5,
-      keywords_per_category integer NOT NULL DEFAULT 5,
-      articles_per_keyword integer NOT NULL DEFAULT 2,
+      category_count integer NOT NULL DEFAULT 7,
+      keywords_per_category integer NOT NULL DEFAULT 1,
+      articles_per_keyword integer NOT NULL DEFAULT 1,
       daily_article_limit integer NOT NULL DEFAULT 7,
       auto_publish boolean NOT NULL DEFAULT false,
       writer_model text NOT NULL DEFAULT 'gpt-5.6-terra',
@@ -59,9 +59,9 @@ export async function ensureSchema() {
       config_revision integer NOT NULL DEFAULT 1,
       updated_at timestamptz NOT NULL DEFAULT now()
     )`;
-      await sql`ALTER TABLE automation_config ADD COLUMN IF NOT EXISTS category_count integer NOT NULL DEFAULT 5`;
-      await sql`ALTER TABLE automation_config ADD COLUMN IF NOT EXISTS keywords_per_category integer NOT NULL DEFAULT 5`;
-      await sql`ALTER TABLE automation_config ADD COLUMN IF NOT EXISTS articles_per_keyword integer NOT NULL DEFAULT 2`;
+      await sql`ALTER TABLE automation_config ADD COLUMN IF NOT EXISTS category_count integer NOT NULL DEFAULT 7`;
+      await sql`ALTER TABLE automation_config ADD COLUMN IF NOT EXISTS keywords_per_category integer NOT NULL DEFAULT 1`;
+      await sql`ALTER TABLE automation_config ADD COLUMN IF NOT EXISTS articles_per_keyword integer NOT NULL DEFAULT 1`;
       await sql`ALTER TABLE automation_config ADD COLUMN IF NOT EXISTS daily_article_limit integer NOT NULL DEFAULT 7`;
       await sql`ALTER TABLE automation_config ADD COLUMN IF NOT EXISTS auto_publish boolean NOT NULL DEFAULT false`;
       await sql`ALTER TABLE automation_config ADD COLUMN IF NOT EXISTS revenue_goal_monthly bigint NOT NULL DEFAULT 100000000`;
@@ -77,13 +77,13 @@ export async function ensureSchema() {
       await sql`ALTER TABLE automation_config ADD COLUMN IF NOT EXISTS pause_on_budget boolean NOT NULL DEFAULT true`;
       await sql`ALTER TABLE automation_config ADD COLUMN IF NOT EXISTS config_revision integer NOT NULL DEFAULT 1`;
       await sql`UPDATE automation_config
-        SET category_count=5,
-            keywords_per_category=5,
-            articles_per_keyword=2,
+        SET category_count=7,
+            keywords_per_category=1,
+            articles_per_keyword=1,
             daily_article_limit=7,
-            config_revision=3,
+            config_revision=4,
             updated_at=now()
-        WHERE id=1 AND config_revision < 3`;
+        WHERE id=1 AND config_revision < 4`;
       await sql`CREATE TABLE IF NOT EXISTS oauth_credentials (
       id integer PRIMARY KEY DEFAULT 1 CHECK (id = 1),
       access_token text,
