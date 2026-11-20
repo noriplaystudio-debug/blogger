@@ -49,7 +49,10 @@ export async function POST(req: NextRequest) {
         `${origin}/api/cron/weekly-manual-worker?runKey=${encodeURIComponent(runKey)}`,
         {
           method: "POST",
-          headers: { Authorization: `Bearer ${secret}` },
+          headers: {
+            Authorization: `Bearer ${secret}`,
+            "x-blogger-manual-run": "1",
+          },
           cache: "no-store",
         },
       ).catch(() => {});
