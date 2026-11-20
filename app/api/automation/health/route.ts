@@ -125,7 +125,7 @@ export async function GET() {
           : 0),
       0,
     );
-    const weeklyTarget = config.dailyArticleLimit * 7;
+    const weeklyTarget = config.categoryCount;
     const workerRuns = runs
       .filter((run: any) => run.kind === "article-worker")
       .slice(0, 20);
