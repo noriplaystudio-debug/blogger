@@ -6,11 +6,14 @@ import { NextRequest } from "next/server";
 // article pipeline is being stabilized.
 export const AUTOMATION_MAINTENANCE_PAUSED = true;
 
-export function assertCron(req: NextRequest) {
+export function assertCron(
+  req: NextRequest,
+  options: { allowDuringMaintenance?: boolean } = {},
+) {
   const secret = process.env.CRON_SECRET;
   if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`)
     throw new Error("UNAUTHORIZED_CRON");
-  if (AUTOMATION_MAINTENANCE_PAUSED)
+  if (AUTOMATION_MAINTENANCE_PAUSED && !options.allowDuringMaintenance)
     throw new Error("AUTOMATION_MAINTENANCE_PAUSED");
 }
 
