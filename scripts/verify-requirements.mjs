@@ -19,6 +19,9 @@ const files = {
   vercel: read("vercel.json"),
   middleware: read("middleware.ts"),
   cron: read("lib/cron.ts"),
+  page: read("app/page.tsx"),
+  weeklyStart: read("app/api/automation/weekly-start/route.ts"),
+  weeklyProgress: read("app/api/automation/weekly-progress/route.ts"),
 };
 
 const checks = [];
@@ -47,11 +50,13 @@ check(
     files.planning.includes("단발성 경기 결과·연예 소식·사회 사건 속보는 선정하지 않는다"),
 );
 check(
-  "주 49개 용량 부족 시 카테고리 보충",
-  files.weekly.includes("weeklyArticleTarget") &&
-    files.weekly.includes("plannedArticleCapacity") &&
-    files.weeklyWorker.includes("weeklyArticleTarget") &&
-    files.weeklyWorker.includes("supplementalCategory"),
+  "수동 7개 카테고리 × 글 1개 계획",
+  files.planning.includes("categoryCount: 7") &&
+    files.planning.includes("keywordsPerCategory: 1") &&
+    files.planning.includes("articlesPerKeyword: 1") &&
+    files.planning.includes("articleCountOverride: 1") &&
+    files.weeklyWorker.includes("weeklyArticleTarget = Number(settings.categoryCount)") &&
+    files.weeklyProgress.includes("Number(progress.settings?.categoryCount || 0)"),
 );
 check(
   "계획 단계 관심신호와 발행 근거 검증 분리",
@@ -112,11 +117,11 @@ check(
     files.daily.includes("reserved"),
 );
 check(
-  "당일 자동 재시도 또는 유지보수 중 예약 완전 중단",
-  files.cron.includes("AUTOMATION_MAINTENANCE_PAUSED = true") ||
-    ["/api/cron/daily-retry-1", "/api/cron/daily-retry-2", "/api/cron/daily-retry-3"].every(
-      (route) => files.vercel.includes(route),
-    ),
+  "예약 중단 + 사용자 수동 실행 분리",
+  files.cron.includes("AUTOMATION_MAINTENANCE_PAUSED = true") &&
+    !files.vercel.includes('"crons"') &&
+    files.page.includes("선정된 글 수동 작성·검수") &&
+    files.weeklyStart.includes('"x-blogger-manual-run": "1"'),
 );
 check(
   "Blogger 자동 공개와 중복 방지",
