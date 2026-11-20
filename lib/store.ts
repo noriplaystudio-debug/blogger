@@ -34,7 +34,7 @@ export async function ensureSchema() {
         await sql`SELECT pg_advisory_xact_lock(746523901)`;
       await sql`CREATE TABLE IF NOT EXISTS automation_config (
       id integer PRIMARY KEY DEFAULT 1 CHECK (id = 1),
-      enabled boolean NOT NULL DEFAULT true,
+      enabled boolean NOT NULL DEFAULT false,
       category_count integer NOT NULL DEFAULT 7,
       keywords_per_category integer NOT NULL DEFAULT 1,
       articles_per_keyword integer NOT NULL DEFAULT 1,
@@ -77,7 +77,9 @@ export async function ensureSchema() {
       await sql`ALTER TABLE automation_config ADD COLUMN IF NOT EXISTS pause_on_budget boolean NOT NULL DEFAULT true`;
       await sql`ALTER TABLE automation_config ADD COLUMN IF NOT EXISTS config_revision integer NOT NULL DEFAULT 1`;
       await sql`UPDATE automation_config
-        SET category_count=7,
+        SET enabled=false,
+            auto_publish=false,
+            category_count=7,
             keywords_per_category=1,
             articles_per_keyword=1,
             daily_article_limit=7,
