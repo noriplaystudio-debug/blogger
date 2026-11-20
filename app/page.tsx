@@ -463,9 +463,9 @@ type PerformanceReport = {
 };
 
 const DEFAULT_WORKFLOW: Workflow = {
-  categoryCount: 5,
-  keywordsPerCategory: 5,
-  articlesPerKeyword: 2,
+  categoryCount: 7,
+  keywordsPerCategory: 1,
+  articlesPerKeyword: 1,
   dailyArticleLimit: 7,
 };
 
@@ -1647,7 +1647,7 @@ export default function Home() {
     let stopReason = "";
     for (
       let i = 0;
-      i < ids.length && completedSlots < workflow.dailyArticleLimit;
+      i < ids.length && completedSlots < 7;
       i += 1
     ) {
       if (batchStopRequestedRef.current) {
@@ -3134,88 +3134,37 @@ export default function Home() {
         <div className="sectionTitle">
           <span>03</span>
           <div>
-            <h2>콘텐츠 수량과 자동 운영</h2>
+            <h2>유지성 콘텐츠 7개 수동 운영</h2>
             <p>
-              아래 값은 언제든 변경할 수 있으며 다음 주간 계획부터 적용됩니다.
+              예약 자동 실행은 중단되어 있습니다. 버튼을 직접 눌렀을 때만 카테고리 조사와 글 작성·검수가 실행됩니다.
             </p>
           </div>
         </div>
         <div className="modelGrid">
           <label>
-            선정할 카테고리 수
-            <input
-              type="number"
-              min="1"
-              max="20"
-              value={workflow.categoryCount}
-              onChange={(e) =>
-                setWorkflow({
-                  ...workflow,
-                  categoryCount: Number(e.target.value),
-                })
-              }
-            />
+            선정할 유지성 카테고리
+            <input type="number" value={7} readOnly />
           </label>
           <label>
-            카테고리별 키워드 수
-            <input
-              type="number"
-              min="1"
-              max="20"
-              value={workflow.keywordsPerCategory}
-              onChange={(e) =>
-                setWorkflow({
-                  ...workflow,
-                  keywordsPerCategory: Number(e.target.value),
-                })
-              }
-            />
+            카테고리당 작성 글
+            <input type="number" value={1} readOnly />
           </label>
           <label>
-            키워드별 작성 글 수
-            <input
-              type="number"
-              min="1"
-              max="5"
-              value={workflow.articlesPerKeyword}
-              onChange={(e) =>
-                setWorkflow({
-                  ...workflow,
-                  articlesPerKeyword: Number(e.target.value),
-                })
-              }
-            />
-          </label>
-          <label>
-            하루 자동 작성량
-            <input
-              type="number"
-              min="1"
-              max="20"
-              value={workflow.dailyArticleLimit}
-              onChange={(e) =>
-                setWorkflow({
-                  ...workflow,
-                  dailyArticleLimit: Number(e.target.value),
-                })
-              }
-            />
+            한 번에 수동 작성·검수
+            <input type="number" value={7} readOnly />
           </label>
         </div>
         <p>
-          현재 설정 상한: 최대{" "}
-          {workflow.categoryCount *
-            workflow.keywordsPerCategory *
-            workflow.articlesPerKeyword}
-          개 글 · 하루 {workflow.dailyArticleLimit}개 · 모두 통과할 경우 약{" "}
-          {Math.ceil(
-            (workflow.categoryCount *
-              workflow.keywordsPerCategory *
-              workflow.articlesPerKeyword) /
-              Math.max(1, workflow.dailyArticleLimit),
-          )}
-          일 소요
+          운영 방식: 유지성 카테고리 7개를 찾고 각 카테고리에서 글 1개씩,
+          총 7개를 준비합니다. 별도의 하위 키워드 확장 단계는 실행하지 않습니다.
         </p>
+        <div className="healthWarning">
+          <b>예약 자동 실행 중단</b>
+          <p>
+            연예·스포츠 속보 같은 스팟성 주제는 제외하고, 운행정보·행사일정·
+            이용안내·예약/신청·생활 행정처럼 반복 검색되는 정보형 주제를 우선합니다.
+          </p>
+        </div>
         <label className="automationToggle">
           <input
             type="checkbox"
@@ -3223,10 +3172,9 @@ export default function Home() {
             onChange={(e) => setAutomationEnabled(e.target.checked)}
           />
           <span>
-            <b>{automationEnabled ? "예약 자동 실행 켜짐" : "긴급 중지"}</b>
+            <b>예약 자동 실행은 유지보수 중단 상태</b>
             <small>
-              끄고 저장하면 주간 조사·일일 작성·성과 분석 예약을 실행하지
-              않습니다.
+              현재 Vercel 예약 일정은 제거되어 있어 이 설정과 관계없이 자동 예약 실행은 시작되지 않습니다.
             </small>
           </span>
         </label>
@@ -3345,28 +3293,13 @@ export default function Home() {
             수량·자동화 설정 저장
           </button>
           <button
-            onClick={runDailyNow}
-            disabled={
-              !!busy ||
-              !automation.configured ||
-              !automation.readyForUnattendedRun
-            }
-            title={
-              automation.readyForUnattendedRun
-                ? "예약 실행과 동일한 일일 자동화를 지금 즉시 실행합니다."
-                : "무인 운영 준비 상태를 모두 정상으로 만든 뒤 실행할 수 있습니다."
-            }
-          >
-            일일 자동화 지금 실행
-          </button>
-          <button
             className="primary"
             onClick={createPlan}
             disabled={!!busy || !settings.connected.openai}
           >
             {planningRun?.settingsSignature === workflowSignature(workflow)
-              ? "저장된 지점부터 주간 계획 계속"
-              : "주간 계획 지금 생성"}
+              ? "저장된 지점부터 카테고리 조사 계속"
+              : "유지성 카테고리 7개 찾기"}
           </button>
           {planningRun && (
             <button
@@ -3384,18 +3317,14 @@ export default function Home() {
         </div>
         {planningRun?.settingsSignature === workflowSignature(workflow) && (
           <p className="healthWarning">
-            진행 중 계획 자동 저장됨 · 카테고리 {planningProgress.categories}개
-            · 키워드 조사 {planningProgress.keywordCategories}/
-            {planningProgress.categories || workflow.categoryCount}개 카테고리 ·
-            글 방향 {planningProgress.completedAngles}/
-            {planningProgress.keywords || "대기"}개 키워드. 브라우저나 컴퓨터를
-            껐다가 다시 실행해도 이 지점부터 이어집니다.
+            진행 중 조사 자동 저장됨 · 유지성 카테고리 {planningProgress.categories}/
+            {workflow.categoryCount}개 · 준비된 글 {planningProgress.completedAngles || 0}개.
+            브라우저나 컴퓨터를 껐다가 다시 실행해도 이 지점부터 이어집니다.
           </p>
         )}
         <small>
-          새 조사는 카테고리 → 카테고리별 키워드 → 키워드별 글 방향으로 나눠
-          실행되며 OpenAI API 비용이 발생합니다. 각 단계가 끝날 때마다
-          저장하므로 시간 초과 시 완료 구간을 다시 조사하지 않습니다.
+          새 조사는 유지성 카테고리 7개와 각 카테고리의 글 1개 주제를 한 번에
+          선정합니다. 하위 키워드 확장 호출을 제거해 조사 API 사용량을 줄였습니다.
         </small>
       </section>
 
@@ -3630,10 +3559,10 @@ export default function Home() {
                   }
                 >
                   {tasks.some((task) => task.state === "error")
-                    ? "오류 작업부터 이어서 "
-                    : "다음 "}
+                    ? "오류 글부터 이어서 수동 작성·검수 "
+                    : "선정된 글 수동 작성·검수 "}
                   {Math.min(
-                    workflow.dailyArticleLimit,
+                    7,
                     tasks.filter(
                       (t) =>
                         ["waiting", "error"].includes(t.state) ||
@@ -3641,7 +3570,7 @@ export default function Home() {
                           getReviewGuidance(t)?.canRetryAutomatically),
                     ).length,
                   )}
-                  개 작성
+                  개
                 </button>
               )}
             </div>
