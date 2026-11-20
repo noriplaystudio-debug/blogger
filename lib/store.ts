@@ -539,12 +539,21 @@ export async function getWorkspace() {
   const jobs = plan
     ? await db()`SELECT * FROM article_jobs
         WHERE week_start=${plan.week_start}
-          OR state IN ('waiting','working','error','ready','needs_review','source_blocked','draft')
+          OR state='draft'
         ORDER BY scheduled_date NULLS LAST, week_start, ordinal`
     : [];
+  const activeSignatures = new Set<string>();
+  for (const category of plan?.payload?.categories || [])
+    for (const keyword of category?.keywords || [])
+      for (const angle of keyword?.angles || [])
+        activeSignatures.add(jobSignature(category.name, keyword.keyword, angle));
+  const visibleJobs = jobs.filter((row: any) => {
+    if (row.state === "draft") return true;
+    return activeSignatures.has(jobSignature(row.category, row.keyword, row.angle));
+  });
   return {
     plan: plan ? { ...plan.payload, sources: plan.sources } : null,
-    tasks: jobs.map((row) => jobToTask(row, config.dailyArticleLimit)),
+    tasks: visibleJobs.map((row) => jobToTask(row, config.dailyArticleLimit)),
   };
 }
 
