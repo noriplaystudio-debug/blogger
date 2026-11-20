@@ -30,7 +30,10 @@ export async function POST(req: Request) {
           `${origin}/api/cron/weekly-manual-worker?runKey=${encodeURIComponent(existingRunning.runKey)}`,
           {
             method: "POST",
-            headers: { Authorization: `Bearer ${secret}` },
+            headers: {
+              Authorization: `Bearer ${secret}`,
+              "x-blogger-manual-run": "1",
+            },
             cache: "no-store",
           },
         ).catch(() => {});
@@ -59,7 +62,7 @@ export async function POST(req: Request) {
         0,
       );
       const weeklyArticleTarget =
-        Number(existingRunning.settings?.dailyArticleLimit || current.dailyArticleLimit) * 7;
+        Number(existingRunning.settings?.categoryCount || current.categoryCount);
 
       return NextResponse.json({
         ok: true,
@@ -108,7 +111,7 @@ export async function POST(req: Request) {
           : 0),
       0,
     );
-    const weeklyArticleTarget = settings.dailyArticleLimit * 7;
+    const weeklyArticleTarget = settings.categoryCount;
     const canResumeExisting =
       existingCategories.length > 0 &&
       existingArticleCapacity < weeklyArticleTarget;
@@ -163,7 +166,10 @@ export async function POST(req: Request) {
         `${origin}/api/cron/weekly-manual-worker?runKey=${encodeURIComponent(runKey)}`,
         {
           method: "POST",
-          headers: { Authorization: `Bearer ${secret}` },
+          headers: {
+              Authorization: `Bearer ${secret}`,
+              "x-blogger-manual-run": "1",
+            },
           cache: "no-store",
         },
       ).catch(() => {});
